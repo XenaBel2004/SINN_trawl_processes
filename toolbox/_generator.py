@@ -4,9 +4,18 @@ import numpy as np
 
 
 def FPU(
-    gamma=1, beta=1, U0=5, x0=1,sigma=0, dt=0.001, dt_save=0.2, t_burnin=10, t_total=100, batch=400
+    gamma=1,
+    beta=1,
+    U0=5,
+    x0=1,
+    sigma=0,
+    dt=0.001,
+    dt_save=0.2,
+    t_burnin=10,
+    t_total=100,
+    batch=400,
 ):
-    '''
+    """
     Fermi-Pasta-Ulam potential (double-well)
 
     Parameters
@@ -17,12 +26,12 @@ def FPU(
         inverse temperature
     U0: float > 0
          depth of the well
-    x0: float > 0 
+    x0: float > 0
          location of the basin
     sigma: float > 0
-        skewness of the double well 
+        skewness of the double well
     dt: float > 0
-        time step size of the numerial solver 
+        time step size of the numerial solver
     dt_save: float >= dt > 0
         time between saving snapshots
     t_burnin: float in (0, t_total)
@@ -36,10 +45,10 @@ def FPU(
     -------
     traj: tensor of size (batch, t_total / dt_save, 2)
         Sample trajectories, [:, :, 0] are momemtum, [:, :, 1] are position.
-    '''
+    """
 
-    def V_double_well(x,U0,x0,sigma):
-        return 4*U0/x0**4*x**3-4*U0/x0**2*x+sigma/(2*x0)
+    def V_double_well(x, U0, x0, sigma):
+        return 4 * U0 / x0**4 * x**3 - 4 * U0 / x0**2 * x + sigma / (2 * x0)
 
     # t_total = 10*delta_t*sec_length
     # length=int(t_total/dt)+1
