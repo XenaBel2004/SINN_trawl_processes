@@ -1,4 +1,4 @@
-# base.py
+# -*- coding: utf-8 -*-
 """
 Base classes that define the public API for stationary stochastic processes
 and their finite‑dimensional distributions (FDDs).
@@ -23,22 +23,10 @@ class StationaryStochasticProcess(ABC):
     """
     Abstract base class for *stationary* stochastic processes.
 
-    The class supplies common utilities (argument validation, orientation
-    handling, cumulant/characteristic‑function evaluation, sampling) that
-    concrete subclasses can reuse.
-
-    Parameters
-    ----------
-    arg_check:
-        Whether to perform run‑time validation of user supplied arguments.
-        Turning this off can give a modest speed‑up when you are certain inputs
-        are well‑formed.
-    theta_batch_first:
-        Default assumption for the orientation of a user supplied ``theta``.
-        If ``True`` the first dimension corresponds to the batch dimension, i.e.
-        ``theta`` has shape ``(B, D)`` where ``D`` is the number of observation
-        times.  If ``False`` the shape is ``(D, B)`` and the class will
-        internally transpose the tensor.
+    This class supplies a common toolbox (argument validation, orientation
+    handling, cumulant/characteristic‑function evaluation and sampling) that
+    concrete subclasses can reuse.  All heavy‑weight operations are delegated
+    to a :class:`StationaryProcessFDD` instance built by :meth:`at_times`.
     """
 
     def __init__(
@@ -48,9 +36,42 @@ class StationaryStochasticProcess(ABC):
         theta_batch_first: bool = True,
         sample_batch_first: bool = True,
         sample_unsqueeze: bool = True,
-        device: Optional[torch.Device] = None,
+        device: Optional[torch.device] = None,
     ) -> None:
-        self.device: torch.Device = device
+        """
+        Construct a :class:`StationaryStochasticProcess`.
+
+        Parameters
+        ----------
+        arg_check : bool, optional
+            Whether to validate user‑supplied arguments (default: ``True``).
+            Disabling validation can give a modest speed‑up when you are
+            certain inputs are well‑formed.
+        theta_batch_first : bool, optional
+            Default orientation for ``theta`` tensors passed to :meth:`cumulant`
+            and :meth:`charfunc`.  ``True`` means the batch dimension comes
+            first (shape ``(B, D)``); ``False`` swaps the axes (shape
+            ``(D, B)``).  (default: ``True``).
+        sample_batch_first : bool, optional
+            Default orientation for the tensors returned by :meth:`sample`.  If
+            ``True`` the batch dimension appears first
+            (``(B, D, …)``); if ``False`` the batch dimension is placed
+            last (``(D, B, …)``).  (default: ``True``).
+        sample_unsqueeze : bool, optional
+            Whether to append a trailing singleton dimension to sampled
+            trajectories. If ``True``, sampled trajectories will have shape
+            either (B,D,1) or (D,B,1) (default: ``True``).
+        device : torch.device or ``None``, optional
+            If given, all tensors supplied to the process must live on this
+            device.  The validation helpers raise ``ValueError`` if a tensor is
+            on a different device.
+
+        Notes
+        -----
+        The arguments are stored as instance attributes with the suffix
+        ``_default`` so that they can be overridden per‑call.
+        """
+        self.device: torch.device | None = device
         self.arg_check: bool = arg_check
         self.sample_unsqueeze_default: bool = sample_unsqueeze
         self.theta_batch_first_default: bool = theta_batch_first
@@ -69,6 +90,7 @@ class StationaryStochasticProcess(ABC):
         * No element is ``NaN``.
         * Strictly increasing (no equal neighbours).
         * All entries are unique (duplicates raise an error).
+        * If ``self.device`` is set, ``times`` must be on that device.
 
         Raises
         ------
@@ -97,6 +119,7 @@ class StationaryStochasticProcess(ABC):
         ----------------
         * ``theta`` is two‑dimensional.
         * No element is ``NaN``.
+        * If ``self.device`` is set, ``theta`` must be on that device.
 
         Raises
         ------
@@ -121,9 +144,18 @@ class StationaryStochasticProcess(ABC):
         """
         Validate arguments passed to :meth:`cumulant` / :meth:`charfunc`.
 
-        The checks are a superset of those performed by ``_validate_theta`` and
-        ``_validate_times`` and additionally enforce shape compatibility between
-        ``theta`` and ``times`` according to the orientation flag.
+        The validation is a superset of ``_validate_theta`` and
+        ``_validate_times`` and additionally checks that the dimensions of
+        ``theta`` and ``times`` are compatible with the supplied orientation.
+
+        Parameters
+        ----------
+        theta : Tensor
+            Fourier‑argument tensor.
+        times : Tensor
+            Observation‑time tensor.
+        theta_batch_first : bool
+            Orientation flag (``True`` → ``(B, D)``, ``False`` → ``(D, B)``).
 
         Raises
         ------
@@ -154,10 +186,10 @@ class StationaryStochasticProcess(ABC):
 
         Parameters
         ----------
-        theta
+        theta : Tensor
             Input tensor of shape either ``(B, D)`` (if ``theta_batch_first`` is
             ``True``) or ``(D, B)`` (if ``False``).
-        theta_batch_first
+        theta_batch_first : bool, optional
             Overrides the default orientation stored on the process instance.
             If ``None`` the default value from ``self.theta_batch_first_default``
             is used.
@@ -165,7 +197,7 @@ class StationaryStochasticProcess(ABC):
         Returns
         -------
         Tensor
-            ``theta`` in ``(B, D)`` layout.
+            ``theta`` reshaped to ``(B, D)``.
         """
         if theta_batch_first is None:
             theta_batch_first = self.theta_batch_first_default
@@ -179,14 +211,52 @@ class StationaryStochasticProcess(ABC):
         sample_unsqueeze: Optional[bool] = None,
         sample_batch_first: Optional[bool] = None,
     ) -> Tensor:
+        """
+        Normalise a sampled‑trajectory tensor according to the library’s
+        conventions.
+
+        The method performs two independent transformations that can be
+        controlled on a per‑call basis:
+
+        1. **Batch‑axis orientation** – if ``sample_batch_first`` is ``False``,
+           the batch dimension is moved to the last axis.
+        2. **Trailing unsqueeze** – if ``sample_unsqueeze`` is ``True``,
+           a singleton dimension is appended at the end (e.g. ``(B, D)`` →
+           ``(B, D, 1)``).
+
+        Parameters
+        ----------
+        data : Tensor
+            Tensor returned by the underlying FDD’s :meth:`sample`.  Its shape
+            follows the orientation indicated by the FDD (normally ``(B, D, …)``).
+        sample_unsqueeze : bool, optional
+            Overrides the default ``sample_unsqueeze`` flag stored on the
+            process.  If ``True``, a trailing singleton dimension is added.
+        sample_batch_first : bool, optional
+            Overrides the default ``sample_batch_first`` flag stored on the
+            process.  If ``False``, the batch axis is moved to the last
+            dimension.
+
+        Returns
+        -------
+        Tensor
+            Normalised sample with shape ``(batch, time, 1)`` (or ``(time,
+            batch, 1)`` when ``sample_batch_first=False``) unless the
+            ``sample_unsqueeze`` flag is ``False``.
+        """
         if sample_unsqueeze is None:
             sample_unsqueeze = self.sample_unsqueeze_default
         if sample_batch_first is None:
-            sample_batch_fist = self.sample_batch_first_default
+            sample_batch_first = self.sample_batch_first_default
+
         if not sample_batch_first:
-            data = data.T
+            # ``data`` is expected to have shape (B, D, …).  Swapping the first
+            # two axes puts the batch dimension last.
+            data = data.transpose(0, 1)
+
         if sample_unsqueeze:
             data = data.unsqueeze(-1)
+
         return data
 
     # -----------------------------------------------------------------
@@ -197,8 +267,8 @@ class StationaryStochasticProcess(ABC):
         self, times: Tensor, rng: Optional[torch.Generator] = None
     ) -> "StationaryProcessFDD":
         """
-        Build a *finite‑dimensional distribution* (FDD) object for the
-        supplied observation grid ``times``.
+        Build a *finite‑dimensional distribution* (FDD) object for the supplied
+        observation grid ``times``.
 
         Sub‑classes must return an instance of a concrete subclass of
         :class:`StationaryProcessFDD` that implements the heavy lifting for
@@ -206,10 +276,12 @@ class StationaryStochasticProcess(ABC):
 
         Parameters
         ----------
-        times
-            A 1‑D strictly increasing tensor of observation times.
-        rng
-            Optional ``torch.Generator`` for reproducible sampling.
+        times : Tensor
+            A 1‑D strictly increasing tensor of observation times.  The
+            validation performed by :meth:`_validate_times` ensures monotonicity,
+            finiteness and device compatibility.
+        rng : torch.Generator, optional
+            Optional random‑number generator for reproducible sampling.
 
         Returns
         -------
@@ -223,19 +295,19 @@ class StationaryStochasticProcess(ABC):
         """
         Marginal probability density function of the process.
 
-        Sub‑classes must provide a vector‑valued (or scalar) density
-        evaluated at the points ``x``.  The return shape should broadcast
-        with ``x``.
+        Sub‑classes must provide a vector‑valued (or scalar) density evaluated
+        at the points ``x``.  The return shape should broadcast with ``x``.
 
         Parameters
         ----------
-        x
+        x : Tensor
             Points at which to evaluate the density.
 
         Returns
         -------
         Tensor
-            Density values with the same dtype as ``x``.
+            Density values with the same ``dtype`` as ``x`` and broadcastable
+            shape.
         """
         raise NotImplementedError
 
@@ -249,13 +321,13 @@ class StationaryStochasticProcess(ABC):
 
         Parameters
         ----------
-        lags
+        lags : Tensor
             Non‑negative lags (time differences) for which to compute the ACF.
 
         Returns
         -------
         Tensor
-            Autocorrelation values.
+            Autocorrelation values, broadcastable to ``lags``.
         """
         raise NotImplementedError
 
@@ -266,21 +338,27 @@ class StationaryStochasticProcess(ABC):
         theta_batch_first: Optional[bool] = None,
     ) -> Tensor:
         """
-        Joint cumulant ``κ(θ) = log E[exp(i <θ, X[times]>)]`` for the supplied
-        observation grid.
+        Compute the joint cumulant
 
-        The function forwards the call to the corresponding :class:`StationaryProcessFDD`
-        instance created by :meth:`at_times`.
+        .. math::
+            \\kappa(\\theta) = \\log \\mathbb E\bigl[\\exp(i\\langle \theta, X[\\mathrm{times}]\\rangle)\\bigr]
+
+        for the supplied observation grid.
+
+        The method validates the arguments, builds the appropriate FDD via
+        :meth:`at_times`, and forwards the request to its :meth:`cumulant`
+        implementation.
 
         Parameters
         ----------
-        theta
+        theta : Tensor
             Tensor of Fourier arguments.  Accepted layouts are ``(B, D)`` or
             ``(D, B)`` depending on ``theta_batch_first``.
-        times
+        times : Tensor
             1‑D tensor of observation times.
-        theta_batch_first
-            Overrides the class‑level default orientation.
+        theta_batch_first : bool, optional
+            Overrides the class‑level default orientation.  ``True`` indicates a
+            ``(B, D)`` layout; ``False`` a ``(D, B)`` layout.
 
         Returns
         -------
@@ -289,6 +367,8 @@ class StationaryStochasticProcess(ABC):
         """
         if theta_batch_first is None:
             theta_batch_first = self.theta_batch_first_default
+        if self.arg_check:
+            self._validate_cumulant_args(theta, times, theta_batch_first)
         return self.at_times(times).cumulant(theta, theta_batch_first)
 
     def charfunc(
@@ -298,13 +378,30 @@ class StationaryStochasticProcess(ABC):
         theta_batch_first: Optional[bool] = None,
     ) -> Tensor:
         """
-        Joint characteristic function ``φ(θ) = exp(κ(θ))``.
+        Compute the joint characteristic function
+
+        .. math::
+            \\vaprhi(\\theta) = \\exp\\bigl(\\kappa(\\theta)\\bigr),
+
+        where ``κ`` is the cumulant computed by :meth:`cumulant`.
+
+        Parameters
+        ----------
+        theta : Tensor
+            Fourier‑argument tensor (same layout conventions as :meth:`cumulant`).
+        times : Tensor
+            1‑D observation‑time tensor.
+        theta_batch_first : bool, optional
+            Orientation flag for ``theta``; defaults to the class setting.
+
+        Returns
+        -------
+        Tensor
+            Characteristic‑function values, broadcastable to the shape of the
+            input ``theta``.
         """
         return torch.exp(self.cumulant(theta, times, theta_batch_first))
 
-    # -----------------------------------------------------------------
-    # generic sampling entry‑point (uses the underlying FDD)
-    # -----------------------------------------------------------------
     def sample(
         self,
         times: Tensor,
@@ -318,21 +415,29 @@ class StationaryStochasticProcess(ABC):
         """
         Sample trajectories of the process on a user supplied grid.
 
+        The method delegates the actual sampling to the :class:`StationaryProcessFDD`
+        returned by :meth:`at_times`.  Any additional keyword arguments are
+        forwarded verbatim to the FDD’s ``sample`` method (e.g. a ``seed`` or
+        implementation‑specific options).
+
         Parameters
         ----------
-        times
+        times : Tensor
             1‑D increasing tensor of observation times.
-        rng
-            Optional ``torch.Generator`` to obtain deterministic draws.
-        batch_size
+        rng : torch.Generator, optional
+            Optional generator to obtain deterministic draws.
+        batch_size : int, default=1
             Number of independent trajectories to return.
-        batch_first
+        batch_first : bool, default=True
             If ``True`` (default) the output tensor has shape
             ``(batch_size, len(times), …)``.  If ``False`` the batch dimension
             is placed last.
-        unsqueeze_last
+        unsqueeze_last : bool, default=True
             If ``True`` an additional singleton dimension is appended at the
             end (matching the original library convention).
+        **kwargs
+            Additional arguments passed directly to the underlying FDD’s
+            ``sample`` method.
 
         Returns
         -------
@@ -371,17 +476,23 @@ class StationaryProcessFDD(ABC):
         Joint cumulant ``κ(θ)`` for the vector
         ``(X_{t₁}, …, X_{t_D})``.
 
+        The implementation must accept ``theta`` either in the internal
+        ``(B, D)`` layout (``theta_batch_first=True``) or in the transposed
+        layout ``(D, B)`` (``theta_batch_first=False``).  The method should
+        normalise the tensor to ``(B, D)`` internally before computation.
+
         The return tensor must have shape ``(B,)``, where ``B`` is the batch
         dimension supplied with ``theta`` (or implicitly ``1`` if no batch was
         provided).
 
         Parameters
         ----------
-        theta
-            Tensor of Fourier arguments; accepted layout is ``(B, D)`` or
+        theta : Tensor
+            Fourier‑argument tensor; accepted layout is ``(B, D)`` or
             ``(D, B)`` depending on ``theta_batch_first``.
-        theta_batch_first
-            Overrides the default orientation stored in the parent process.
+        theta_batch_first : bool, optional
+            Specifies the orientation of ``theta``.  ``True`` (default) indicates
+            a ``(B, D)`` layout.
 
         Returns
         -------
@@ -395,7 +506,24 @@ class StationaryProcessFDD(ABC):
         theta: Tensor,
         theta_batch_first: bool = True,
     ) -> Tensor:
-        """Characteristic function ``φ(θ) = exp(κ(θ))``."""
+        """
+        Characteristic function ``φ(θ) = exp(κ(θ))``.
+
+        This convenience wrapper simply exponentiates the result of
+        :meth:`cumulant`.  The same orientation rules for ``theta`` apply.
+
+        Parameters
+        ----------
+        theta : Tensor
+            Fourier‑argument tensor (same layout as :meth:`cumulant`).
+        theta_batch_first : bool, optional
+            Orientation flag for ``theta`` (default: ``True``).
+
+        Returns
+        -------
+        Tensor
+            Characteristic‑function values, one per batch.
+        """
         return torch.exp(self.cumulant(theta, theta_batch_first))
 
     @abstractmethod
@@ -411,15 +539,18 @@ class StationaryProcessFDD(ABC):
 
         Parameters
         ----------
-        batch_size
+        batch_size : int, default=1
             Number of independent copies to generate.
-        batch_first
+        batch_first : bool, default=True
             If ``True`` (default) the batch dimension appears first in the
             returned tensor.  If ``False`` the batch dimension is moved to the
             last axis.
-        unsqueeze_last
+        unsqueeze_last : bool, default=True
             If ``True`` (default) a singleton dimension is appended at the end,
             matching the original library convention.
+        **kwargs
+            Implementation‑specific keyword arguments (e.g. a random seed,
+            approximation tolerances, etc.).
 
         Returns
         -------
