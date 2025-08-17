@@ -39,10 +39,10 @@ def acf_fft(x: Tensor, lags: int) -> Tensor:
 
     # FFT, multiply by complex conjugate, inverse FFT → autocovariance
     f = torch.fft.fft(x_centered, n=n_fft, dim=0)
-    acov = torch.fft.ifft(f * f.conj(), dim=0).real[:n]
+    acov = torch.fft.ifft(f * f.conj(), dim=0).real[:n].mean(dim = 1)
 
     # Normalise – the zero‑lag term is the variance
-    acf = acov[:lags] / acov[0:1]
+    acf = acov[:lags,...] / acov[0]
     return acf
 
 

@@ -33,7 +33,7 @@ class OUProcess(StationaryStochasticProcess):
         **default_opts,
     ) -> None:
         self.lambda_: Tensor = torch.tensor(lambda_, device = default_opts.get('device'))
-        self.sigma: Tensor = torch.tensor(self.sigma, device = default_opts.get('device'))
+        self.sigma: Tensor = torch.tensor(sigma, device = default_opts.get('device'))
         self.mu: Tensor = torch.tensor(mu, device = default_opts.get('device'))
     
         super().__init__(**default_opts)
@@ -163,9 +163,9 @@ class OUProcessFDD(StationaryProcessFDD):
         Traj = torch.zeros((batch_size, total_steps))
 
         Traj[:, 0] = torch.normal(
-            self.process.mu.view(batch_size),
+            self.process.mu.broadcast_to(batch_size),
             self.process.sigma
-            * torch.sqrt(torch.tensor(1 / (2 * self.process.lambda_))).view(batch_size),
+            * torch.sqrt(1 / (2 * self.process.lambda_)).broadcast_to(batch_size),
             generator=self.rng,
         )
         # Shape handling required by the public API.
@@ -173,8 +173,8 @@ class OUProcessFDD(StationaryProcessFDD):
         dTime = Time[1:] - Time[:-1]
         for i in range(1, total_steps):
             dW_t = torch.normal(
-                torch.tensor(0.0).view(batch_size),
-                torch.sqrt(torch.tensor(dTime[i - 1])).view(batch_size),
+                torch.tensor(0.0).broadcast_to(batch_size),
+                torch.sqrt(dTime[i - 1]).broadcast_to(batch_size),
                 generator=self.rng,
             )
             Traj[:, i] = (
@@ -184,8 +184,5 @@ class OUProcessFDD(StationaryProcessFDD):
                 * dTime[i - 1]
                 + self.process.sigma * dW_t
             )
-        if not batch_first:
-            Traj = Traj.T
-        if unsqueeze_last:
-            Traj = Traj.unsqueeze(-1)
-        return Traj[:, sample_idxs]
+        return self.process._normalize_sample(
+                Traj[:, sample_idxs], sample_batch_first=batch_first, sample_unsqueeze=unsqueeze_last)
