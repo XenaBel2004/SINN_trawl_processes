@@ -40,7 +40,7 @@ class MonteCarloEstimatedCF:
         selected observation times.
     kernel : Callable[[Tensor], Tensor], optional
         Importance‑sampling kernel ``k(θ)``.  By default it returns a vector of
-        ones (i.e. no weighting). θ must be tensor of shape (M, D) where M is 
+        ones (i.e. no weighting). θ must be tensor of shape (M, D) where M is
         batch dimension.
     """
 
@@ -132,7 +132,8 @@ class CharFuncComponent:
 
         # Random MC points uniformly drawn from [-bound, bound]^D
         theta = (
-            2.0 * mc_bound * torch.rand(mc_points, self.idx.shape[0], device=device) - mc_bound
+            2.0 * mc_bound * torch.rand(mc_points, self.idx.shape[0], device=device)
+            - mc_bound
         )
 
         # Slice the data for the selected indices
@@ -167,7 +168,7 @@ class CharFuncLoss(BaseStatLoss):
         dim_normalization: bool = True,
         data_batch_first: bool = True,
     ) -> None:
-        super().__init__(torch.tensor(0.0), lambda t: torch.tensor(0.0)) #type: ignore
+        super().__init__(torch.tensor(0.0), lambda t: torch.tensor(0.0))  # type: ignore
         if not components:
             raise ValueError("CharFuncLoss needs at least one component")
         self.components = list(components)
@@ -286,7 +287,9 @@ def _make_cf_component_from_fdd(
     CharFuncComponent
     """
     fdd = process.at_times(times[idx])
-    return CharFuncComponent(idx=idx, target_fn=lambda theta: fdd.charfunc(theta, theta_batch_first = True))
+    return CharFuncComponent(
+        idx=idx, target_fn=lambda theta: fdd.charfunc(theta, theta_batch_first=True)
+    )
 
 
 def _make_cf_component_from_data(

@@ -1,30 +1,30 @@
-# gaussian_trawl.py
+# -*- coding: ascii -*-
 """
 Concrete implementation of a *Gaussian* trawl process.
 
-The Lévy seed is a standard Gaussian random measure, so the cumulant of the
+The Levy seed is a standard Gaussian random measure, so the cumulant of the
 seed is
+.. math::
+    \\ell(\\theta) = i \\mu \\theta - \\frac12 \\sigma^2 \\theta^2
 
-    ℓ(u) = i μ u - ½ σ² u²
-
-with ``μ`` and ``σ²`` derived from the marginal mean/variance of the
+with :math: `\\mu` and :math: `\\sigma^2` derived from the marginal mean/variance of the
 process and the area of the trawl set.
 
-The class inherits all heavy‑lifting from :class:`TrawlProcess` and
-provides a closed‑form marginal density function.
+The class inherits all heavy-lifting from :class:`TrawlProcess` and
+provides a closed-form marginal density function.
 """
 
 import torch
 from torch import Tensor
 from .trawl import TrawlProcess, TrawlProcessFDD
-from typing import Callable, Optional
+from typing import Callable, Optional, cast
 
 
 class GaussianTrawlProcess(TrawlProcess):
     """
-    Gaussian trawl process ``X_t = L(A_t)`` where the Lévy seed ``L'`` is
+    Gaussian trawl process ``X_t = L(A_t)`` where the Levy seed ``L'`` is
     Gaussian.  The marginal distribution of ``X_t`` is therefore also Gaussian
-    with user‑specified mean and variance.
+    with user-specified mean and variance.
 
     Parameters
     ----------
@@ -43,57 +43,52 @@ class GaussianTrawlProcess(TrawlProcess):
         integrated_trawl_function: Callable[[Tensor], Tensor],
         mean: float = 0.0,
         var: float = 1.0,
-        theta_batch_first: bool = True,
-        arg_check: bool = True,
+        **default_opts
     ) -> None:
-        # Store scalar parameters as zero‑dimensional tensors (no gradient)
-        self.mean: Tensor = torch.tensor(mean, requires_grad=False)
-        self.var: Tensor = torch.tensor(var, requires_grad=False)
+        # Store scalar parameters as zero-dimensional tensors (no gradient)
+        self.mean: Tensor = torch.tensor(mean, device = default_opts.get('device'))
+        self.var: Tensor = torch.tensor(var, device = default_opts.get('device'))
         self.std: Tensor = torch.sqrt(self.var)
 
         # Area of the trawl set at lag zero (used to scale seed moments)
         self.trawl_area: Tensor = integrated_trawl_function(torch.tensor(0.0))
 
-        # Parameters of the Lévy **seed** (i.e. of ``L'``)
-        # The relationship is:   mean_X = μ_seed * |A_0|   →   μ_seed = mean / |A_0|
+        # Parameters of the Levy **seed** (i.e. of ``L'``)
+        # mu_seed = mean / |A_0|
         self.seed_mean: Tensor = self.mean / self.trawl_area
-        #   var_X = σ_seed² * |A_0|   →   σ_seed² = var / |A_0|
+        # var_seed = var / |A_0|
         self.seed_var: Tensor = self.var / self.trawl_area
         self.seed_std: Tensor = torch.sqrt(self.seed_var)
 
         # -----------------------------------------------------------------
-        # Lévy‑seed cumulant for a *Gaussian* seed.
+        # Levy-seed cumulant for a *Gaussian* seed.
         # -----------------------------------------------------------------
-        #   ℓ(u) = i μ u - ½ σ² u².
-        #   The callable must return a **complex** tensor.
-        # -----------------------------------------------------------------
-        def seed_cumulant(u: Tensor) -> Tensor:
+        def seed_cumulant(theta: Tensor) -> Tensor:
             """
-            Log‑characteristic function (cumulant) of the Gaussian Lévy seed.
+            Log-characteristic function (cumulant) of the Gaussian Levy seed.
 
             Parameters
             ----------
-            u
-                Tensor of Fourier arguments (real‑valued).
+            theta
+                Tensor of Fourier arguments (real-valued).
 
             Returns
             -------
             Tensor
-                Complex‑valued cumulant ``i·μ·u - ½·σ²·u²``.
+                Complex-valued cumulant :math: `i \\cdot \\mu \\cdot \\theta + \\frac12 \\cdot \\sigma^2 \\cdot \\theta^2`.
             """
             # Ensure the computation is performed in a complex dtype.
-            u_c = u.to(
+            theta_c = theta.to(
                 dtype=torch.complex64
-                if u.dtype in (torch.float32, torch.complex64)
+                if theta.dtype in (torch.float32, torch.complex64)
                 else torch.complex128
             )
-            return 1.0j * self.seed_mean * u_c - 0.5 * (self.seed_std**2) * (u_c**2)
+            return 1.0j * self.seed_mean * theta_c - 0.5 * (self.seed_std**2) * (theta_c**2)
 
         super().__init__(
             seed_cumulant,
             integrated_trawl_function,
-            arg_check=arg_check,
-            theta_batch_first=theta_batch_first,
+            **default_opts
         )
 
     def pdf(self, x: Tensor) -> Tensor:
@@ -116,14 +111,14 @@ class GaussianTrawlProcess(TrawlProcess):
         self, times: Tensor, rng: Optional[torch.Generator] = None
     ) -> "GaussianTrawlProcessFDD":
         """
-        Build the finite‑dimensional distribution object for a given grid.
+        Build the finite-dimensional distribution object for a given grid.
 
         Parameters
         ----------
         times
-            Observation times (strictly increasing 1‑D tensor).
+            Observation times (strictly increasing 1-D tensor).
         rng
-            Optional random‑number generator for reproducible sampling.
+            Optional random-number generator for reproducible sampling.
 
         Returns
         -------
@@ -135,9 +130,9 @@ class GaussianTrawlProcess(TrawlProcess):
 
 class GaussianTrawlProcessFDD(TrawlProcessFDD):
     """
-    Finite‑dimensional distribution for :class:`GaussianTrawlProcess`.
+    Finite-dimensional distribution for :class:`GaussianTrawlProcess`.
 
-    It implements the Gaussian‑seed sampling strategy required by the base
+    It implements the Gaussian-seed sampling strategy required by the base
     class.
     """
 
@@ -157,16 +152,14 @@ class GaussianTrawlProcessFDD(TrawlProcessFDD):
         rng
             Optional generator for deterministic sampling.
         """
-        self.times: Tensor = times
-        self.process: GaussianTrawlProcess = process
-        self.slices: Tensor = self.process._compute_slice_partition(self.times)
-        self.rng: Optional[torch.Generator] = rng
+        super().__init__(times, process, rng=rng)
+        self.process: GaussianTrawlProcess = cast(GaussianTrawlProcess, self.process)  # MyPy fix
 
     def _sample_slices(self, batch_size: int = 1) -> Tensor:
         """
         Sample the Gaussian slice variables.
 
-        For a Gaussian Lévy seed the slice values are independent Gaussian
+        For a Gaussian Levy seed the slice values are independent Gaussian
         random variables with means and variances proportional to the slice
         measures.
 
@@ -188,7 +181,7 @@ class GaussianTrawlProcessFDD(TrawlProcessFDD):
         # Allocate an array of zeros with the same dtype/device as ``slices_``.
         result = torch.zeros_like(slices_)
 
-        # Only the lower‑triangular entries are non‑zero (by construction);
+        # Only the lower-triangular entries are non-zero (by construction);
         # sample those entries from the appropriate Gaussian distribution.
         mask = slices_ != 0
         result[mask] = torch.normal(

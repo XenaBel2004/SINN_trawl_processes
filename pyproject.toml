@@ -1,0 +1,29 @@
+[project]
+name = "trawl-sinn"
+version = "0.1.0"
+description = "Simulation of trawl processes via SINN models"
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+license = {text = "BSD-3-Clause"}
+readme = "README.md"
+requires-python=">=3.11, <3.14"
+dependencies = [
+    "matplotlib (>=3.10.5,<4.0.0)",
+    "pandas (>=2.3.1,<3.0.0)",
+    "numpy (>=2.3.2 ,<3.0.0)",
+    "torch (>=2.8.0,<3.0.0)",
+    "jupyter (>=1.1.1,<2.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.12.8"
+mypy = "^1.17.1"
+types-tqdm = "^4.67.0.20250809"
+
