@@ -3,17 +3,6 @@
 
 """Statistical loss functions for stochastic‑process modelling.
 
-The module provides thin wrappers around a statistic computed on the network
-output (e.g. an autocorrelation function or a kernel‑density estimate) and a
-point‑wise loss such as ``torch.nn.functional.mse_loss``.  The public classes
-are:
-
-* :class:`ACFLoss` – autocorrelation (FFT based) – not shown here.
-* :class:`BruteForceACFLoss` – autocorrelation (direct O(N·L) implementation).
-* :class:`RandomBruteForceACFLoss` – like above but evaluates a random subset
-  of lags each forward pass.
-* :class:`DensityLoss` – KDE‑based density comparison.
-
 All concrete losses inherit from :class:`BaseStatLoss`.  Several losses can be
 combined with standard arithmetic operators:
 
@@ -36,8 +25,7 @@ Typical usage
 
 from __future__ import annotations
 
-import random
-from typing import Callable, Sequence, Union, Concatenate, cast
+from typing import Callable, Sequence, Union, Concatenate, cast, Any, Dict
 
 import torch
 from torch import Tensor
@@ -77,9 +65,15 @@ def _resolve_loss(loss: Union[LossFn, str]) -> LossFn:
     if not isinstance(loss, str):
         raise TypeError(f"Loss must be a callable or a string, got {type(loss)}")
     try:
-        return getattr(F, loss)
-    except AttributeError as exc:  # pragma: no cover
-        raise ValueError(f"torch.nn.functional has no loss named '{loss}'") from exc
+        loss_func = getattr(F, loss)
+
+        def loss(x: Tensor, y: Tensor):
+            return loss_func(x, y, reduction="mean")
+
+        return loss
+
+    except AttributeError:  # pragma: no cover
+        raise ValueError(f"torch.nn.functional has no loss named '{loss}'")
 
 
 # --------------------------------------------------------------------------- #
@@ -125,8 +119,9 @@ class BaseStatLoss(nn.Module):
         target: Tensor,
         stat_fn: Callable[[Tensor], Tensor],
         *,
-        pointwise_loss: Union[LossFn, str] = "mse_loss",
-        reduction: str = "mean",
+        loss_fn: Union[LossFn, str] = "mse_loss",
+        loss_fn_opts: Dict[str, Any] = {},
+        data_batch_first: bool = False,
         **extra_attrs,
     ) -> None:
         super().__init__()
@@ -135,8 +130,10 @@ class BaseStatLoss(nn.Module):
         self._target: Tensor = cast(Tensor, self._target)  # MyPy trick
 
         self.stat_fn = stat_fn
-        self.reduction = reduction
-        self.loss_fn: LossFn = _resolve_loss(pointwise_loss)
+        self.loss_fn: LossFn = _resolve_loss(loss_fn)
+        self.loss_fn_opts: Dict[str, Any] = loss_fn_opts
+
+        self.data_batch_first = data_batch_first 
 
         # Store auxiliary attributes (e.g. KDE bandwidth, random‑lag mask, …).
         for name, value in extra_attrs.items():
@@ -161,15 +158,12 @@ class BaseStatLoss(nn.Module):
         Tensor
             A scalar (or a zero‑dimensional tensor) that can be back‑propagated.
         """
-        pred = self.stat_fn(x)  # shape → (L, B, D) or similar
-        target = self._target  # same shape as ``pred``
-
-        loss = self.loss_fn(
-            pred,
-            target,
-            reduction=self.reduction,
-        )
-        return loss
+        x = x.squeeze()
+        if x.ndim == 3:
+            raise ValueError("Multidimensional processes are not supported yet")
+        if self.data_batch_first:
+            x = x.swapaxes(0, 1)
+        return self.loss_fn(self.stat_fn(x), self._target, **self.loss_fn_opts)
 
     # --------------------------------------------------------------------- #
     #  Arithmetic operator overloads – enable easy loss composition

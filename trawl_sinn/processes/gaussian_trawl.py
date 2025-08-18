@@ -43,11 +43,11 @@ class GaussianTrawlProcess(TrawlProcess):
         integrated_trawl_function: Callable[[Tensor], Tensor],
         mean: float = 0.0,
         var: float = 1.0,
-        **default_opts
+        **default_opts,
     ) -> None:
         # Store scalar parameters as zero-dimensional tensors (no gradient)
-        self.mean: Tensor = torch.tensor(mean, device = default_opts.get('device'))
-        self.var: Tensor = torch.tensor(var, device = default_opts.get('device'))
+        self.mean: Tensor = torch.tensor(mean, device=default_opts.get("device"))
+        self.var: Tensor = torch.tensor(var, device=default_opts.get("device"))
         self.std: Tensor = torch.sqrt(self.var)
 
         # Area of the trawl set at lag zero (used to scale seed moments)
@@ -83,13 +83,11 @@ class GaussianTrawlProcess(TrawlProcess):
                 if theta.dtype in (torch.float32, torch.complex64)
                 else torch.complex128
             )
-            return 1.0j * self.seed_mean * theta_c - 0.5 * (self.seed_std**2) * (theta_c**2)
+            return 1.0j * self.seed_mean * theta_c - 0.5 * (self.seed_std**2) * (
+                theta_c**2
+            )
 
-        super().__init__(
-            seed_cumulant,
-            integrated_trawl_function,
-            **default_opts
-        )
+        super().__init__(seed_cumulant, integrated_trawl_function, **default_opts)
 
     def pdf(self, x: Tensor) -> Tensor:
         """
@@ -153,7 +151,9 @@ class GaussianTrawlProcessFDD(TrawlProcessFDD):
             Optional generator for deterministic sampling.
         """
         super().__init__(times, process, rng=rng)
-        self.process: GaussianTrawlProcess = cast(GaussianTrawlProcess, self.process)  # MyPy fix
+        self.process: GaussianTrawlProcess = cast(
+            GaussianTrawlProcess, self.process
+        )  # MyPy fix
 
     def _sample_slices(self, batch_size: int = 1) -> Tensor:
         """

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import Callable, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
-from .base_loss import LossFn, BaseStatLoss
-from ..processes import StationaryStochasticProcess
+from typing import Optional
+from .base_loss import BaseStatLoss
+from ..processes import StationaryProcessFDD
 import numpy as np
 import torch
 from torch import Tensor
-import torch.nn as nn
 
 # --------------------------------------------------------------------------- #
 #  Utility functions (statistics)
@@ -56,32 +55,25 @@ class DensityLoss(BaseStatLoss):
     """Gaussian KDE based density loss."""
 
     @classmethod
-    def from_fdd(
+    def analytical(
         cls,
-        process: StationaryStochasticProcess,
+        distr: StationaryProcessFDD,
         lower: float,
         upper: float,
         n: int,
         *,
         bw: Optional[float] = None,
-        loss: Union[LossFn, str] = "mse_loss",
-        reduction: str = "mean",
+        **configuration_opts,
     ) -> "DensityLoss":
-        target = process.pdf(torch.linspace(lower, upper, steps=n))
-        stat_fn = lambda x: gaussian_kde(x, lower=lower, upper=upper, n=n, bw=bw)
+        target = distr.process.pdf(torch.linspace(lower, upper, steps=n))
+        def stat_fn(x):
+            return gaussian_kde(x, lower=lower, upper=upper, n=n, bw=bw)
         return cls(
-            target,
-            stat_fn,
-            pointwise_loss=loss,
-            reduction=reduction,
-            lower=lower,
-            upper=upper,
-            n=n,
-            bw=bw,
+            target, stat_fn, lower=lower, upper=upper, n=n, bw=bw, **configuration_opts
         )
 
     @classmethod
-    def from_empirical(
+    def empirical(
         cls,
         data: Tensor,
         lower: float,
@@ -89,8 +81,7 @@ class DensityLoss(BaseStatLoss):
         n: int,
         *,
         bw: Optional[float] = None,
-        loss: Union[LossFn, str] = "mse_loss",
-        reduction: str = "mean",
+        **configuration_opts,
     ) -> "DensityLoss":
         """
         Build a density loss from observed samples.
@@ -109,16 +100,10 @@ class DensityLoss(BaseStatLoss):
             Same as in :class:`BaseStatLoss`.
         """
         target = gaussian_kde(data, lower=lower, upper=upper, n=n, bw=bw)
-        stat_fn = lambda x: gaussian_kde(x, lower=lower, upper=upper, n=n, bw=bw)
+        def stat_fn(x):
+            return gaussian_kde(x, lower=lower, upper=upper, n=n, bw=bw)
         return cls(
-            target,
-            stat_fn,
-            pointwise_loss=loss,
-            reduction=reduction,
-            lower=lower,
-            upper=upper,
-            n=n,
-            bw=bw,
+            target, stat_fn, lower=lower, upper=upper, n=n, bw=bw, **configuration_opts
         )
 
 

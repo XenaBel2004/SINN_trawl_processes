@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import torch
 from torch import Tensor
-from typing import Callable, Optional
+from typing import Optional
 from abc import ABC, abstractmethod
 
 
@@ -34,7 +34,7 @@ class StationaryStochasticProcess(ABC):
         *,
         arg_check: bool = True,
         theta_batch_first: bool = True,
-        sample_batch_first: bool = True,
+        sample_batch_first: bool = False,
         sample_unsqueeze: bool = True,
         device: Optional[torch.device] = None,
     ) -> None:
@@ -411,8 +411,8 @@ class StationaryStochasticProcess(ABC):
         *,
         rng: Optional[torch.Generator] = None,
         batch_size: int = 1,
-        batch_first: bool = True,
-        unsqueeze_last: bool = True,
+        batch_first: Optional[bool] = None,
+        unsqueeze_last: Optional[bool] = None,
         **kwargs,
     ) -> Tensor:
         """

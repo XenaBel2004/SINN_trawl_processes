@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple, cast
+from typing import Optional, cast
 
 import torch
 from torch import Tensor
@@ -32,10 +32,10 @@ class OUProcess(StationaryStochasticProcess):
         lambda_: float = 1.0,
         **default_opts,
     ) -> None:
-        self.lambda_: Tensor = torch.tensor(lambda_, device = default_opts.get('device'))
-        self.sigma: Tensor = torch.tensor(sigma, device = default_opts.get('device'))
-        self.mu: Tensor = torch.tensor(mu, device = default_opts.get('device'))
-    
+        self.lambda_: Tensor = torch.tensor(lambda_, device=default_opts.get("device"))
+        self.sigma: Tensor = torch.tensor(sigma, device=default_opts.get("device"))
+        self.mu: Tensor = torch.tensor(mu, device=default_opts.get("device"))
+
         super().__init__(**default_opts)
 
     def at_times(
@@ -80,7 +80,7 @@ class OUProcess(StationaryStochasticProcess):
         """
         return (
             torch.distributions.normal.Normal(
-                torch.tensor(self.mu), self.sigma / torch.sqrt(2 * self.lambda_)
+                self.mu, self.sigma / torch.sqrt(2 * self.lambda_)
             )
             .log_prob(x)
             .exp()
@@ -109,15 +109,10 @@ class OUProcess(StationaryStochasticProcess):
 
 class OUProcessFDD(StationaryProcessFDD):
     def __init__(
-        self,
-        process: OUProcess,
-        times: Tensor,
-        rng: Optional[torch.Generator] = None
+        self, process: OUProcess, times: Tensor, rng: Optional[torch.Generator] = None
     ) -> None:
         super().__init__(times, process, rng=rng)
         self.process: OUProcess = cast(OUProcess, self.process)  # MyPy fix
-
-
 
     # -----------------------------------------------------------------
     # Public API required by ``StationaryProcessFDD``.
@@ -151,10 +146,11 @@ class OUProcessFDD(StationaryProcessFDD):
         unsqueeze_last: Optional[bool] = None,
         dt: float = 0.05,
     ) -> Tensor:
-
-        base_grid_steps : int = int((self.times[-1] / dt).item()) + 1
-        base_grid_time : float = base_grid_steps * dt
-        base_grid = torch.linspace(0.0, base_grid_time, base_grid_steps, device = self.process.device)
+        base_grid_steps: int = int((self.times[-1] / dt).item()) + 1
+        base_grid_time: float = base_grid_steps * dt
+        base_grid = torch.linspace(
+            0.0, base_grid_time, base_grid_steps, device=self.process.device
+        )
 
         Time = torch.unique(torch.cat((base_grid, self.times)))
         total_steps = Time.shape[0]
@@ -185,4 +181,7 @@ class OUProcessFDD(StationaryProcessFDD):
                 + self.process.sigma * dW_t
             )
         return self.process._normalize_sample(
-                Traj[:, sample_idxs], sample_batch_first=batch_first, sample_unsqueeze=unsqueeze_last)
+            Traj[:, sample_idxs],
+            sample_batch_first=batch_first,
+            sample_unsqueeze=unsqueeze_last,
+        )

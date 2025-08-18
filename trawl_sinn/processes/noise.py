@@ -14,7 +14,7 @@ The implementation conforms to the abstract API defined in ``base.py``:
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple, cast
+from typing import Callable, Optional, cast
 
 import torch
 from torch import Tensor
@@ -134,9 +134,10 @@ class GaussianNoise(NoiseProcess):
         distr: Distribution = torch.distributions.normal.Normal(
             self.mean, self.var**0.5
         )
-        cumulant: Callable[[Tensor], Tensor] = lambda u: torch.exp(
-            1.0j * self.mean * u - self.var * u**2 / 2
-        )
+        def cumulant(u: Tensor) -> Tensor:
+            return torch.exp(
+                    1.0j * self.mean * u - self.var * u**2 / 2
+                )
         super().__init__(distr, cumulant, **default_opts)
 
 
@@ -146,9 +147,10 @@ class ExponentialNoise(NoiseProcess):
         distr: Distribution = torch.distributions.gamma.Gamma(
             torch.tensor(1.0), self.rate
         )
-        cumulant: Callable[[Tensor], Tensor] = lambda u: -torch.log(
-            1 - 1.0j * u / self.rate
-        )
+        def cumulant(u: Tensor) -> Tensor:
+            return -torch.log(
+                    1 - 1.0j * u / self.rate
+                )
         super().__init__(distr, cumulant, **default_opts)
 
 

@@ -68,14 +68,14 @@ class GammaTrawlProcess(TrawlProcess):
         self,
         integrated_trawl_function: Callable[[Tensor], Tensor],
         shape: float = 1.0,
-        rate : float = 1.0,
+        rate: float = 1.0,
         **default_opts,
     ) -> None:
         # -----------------------------------------------------------------
         # Store marginal parameters as zero-dimensional tensors (no gradient).
         # -----------------------------------------------------------------
-        self.shape: Tensor = torch.tensor(shape, device = default_opts.get('device'))
-        self.rate: Tensor = torch.tensor(rate, device = default_opts.get('device'))
+        self.shape: Tensor = torch.tensor(shape, device=default_opts.get("device"))
+        self.rate: Tensor = torch.tensor(rate, device=default_opts.get("device"))
 
         # Area of a single trawl set at lag zero (|A_0| = G(0)).
         self.trawl_area: Tensor = integrated_trawl_function(torch.tensor(0.0))
@@ -193,12 +193,11 @@ class GammaTrawlProcessFDD(TrawlProcessFDD):
         rng :
             torch.Generator object, left for compability. Currently, reproducuble sampling
             is possible only via ``torch.manual_seed``
-        """  
+        """
         super().__init__(times, process, rng=rng)
-        self.process: GammaTrawlProcess = cast(GammaTrawlProcess, self.process)  # MyPy fix
-
-
-
+        self.process: GammaTrawlProcess = cast(
+            GammaTrawlProcess, self.process
+        )  # MyPy fix
 
     # -----------------------------------------------------------------
     # Internal helper - sampling the Gamma slice variables
