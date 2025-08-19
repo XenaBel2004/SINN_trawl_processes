@@ -1,4 +1,4 @@
-![CI](https://github.com/XenaBel2004/SINN_trawl_processes/actions/workflows/check.yml/badge.svg)
+![CI](https://github.com/XenaBel2004/SINN_trawl_processes/actions/workflows/ci.yml/badge.svg)
 
 # Simulation of trawl processes using SINN architectures
 
