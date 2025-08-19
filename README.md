@@ -22,7 +22,9 @@ poetry run jupyter-notebook
 Для запуска тетрадок на Google Collab или Kaggle необходимо добавить в них ячейку следующего содержания
 ```bash
 !git clone https://github.com/XenaBel2004/SINN_trawl_processes.git
-!cp SINN_trawl_process . -r
+!cp SINN_trawl_processes/ambitsinn . -r
 
-import ambitsinn
+Далее можно использовать как обычный пакет:
+```python
+from ambitsinn import ...
 ```
