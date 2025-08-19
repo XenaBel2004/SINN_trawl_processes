@@ -1,0 +1,56 @@
+[project]
+name = "ambitsinn"
+version = "0.1.0"
+description = "Simulation of trawl processes via SINN models"
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+license = {text = "BSD-3-Clause"}
+readme = "README.md"
+requires-python=">=3.11, <3.14"
+dependencies = [
+    "matplotlib (>=3.10.5,<4.0.0)",
+    "pandas (>=2.3.1,<3.0.0)",
+    "numpy (>=2.3.2 ,<3.0.0)",
+    "torch (>=2.8.0,<3.0.0)",
+    "jupyter (>=1.1.1,<2.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.12.8"
+mypy = "^1.17.1"
+types-tqdm = "^4.67.0.20250809"
+
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^8.2.3"
+sphinx-rtd-theme = "^3.0.2"
+sphinx-autodoc-typehints = "^3.2.0"
+sphinx-autobuild = "^2024.10.3"
+docformatter = "^1.7.7"
+
+[tool.ruff]
+line-length = 120 
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+#ignore = [
+#  "D100", # public module
+#  "D101", # public class
+#  "D102", # public method
+#  "D103", # public function
+#  "D105", # magic methods
+#  "D107", # init
+#  "D202", # blank lines after function docstring
+#  "D203", # blank line before class docstring
+#  "D205", # blank line between summary line and description
+#  "D213", # Multi-line docstring summary should start at the second line
+#  "D402", # First line should not be the function's signature
+#  "D417", # Missing argument descriptions
+#]
