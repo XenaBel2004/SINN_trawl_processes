@@ -220,7 +220,7 @@ class CharFuncLoss(BaseStatLoss):
             disable_tqdm = self.disable_tqdm_default
 
         data_ = _normalize_data(data, data_batch_first)
-        loss = torch.tensor(0.0, device=data_.device, dtype=data_.dtype)
+        loss = torch.tensor(0.0, device=data_.device, dtype=data_.dtype, requires_grad = True)
         for comp in tqdm(self.components, disable=disable_tqdm):
             term = comp._mc_estimate(
                 data_,
