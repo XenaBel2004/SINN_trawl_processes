@@ -41,4 +41,4 @@ jobs:
 
       - name: Check types
         run: |
-          poetry run mypy .
+          poetry run mypy ambitsinn
