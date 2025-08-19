@@ -4,9 +4,7 @@ from torch import nn
 
 
 class SINN(nn.Module):
-    def __init__(
-        self, observed_dimension, hidden_size, num_layers, output_size, dropout_p=0
-    ):
+    def __init__(self, observed_dimension, hidden_size, num_layers, output_size, dropout_p=0):
         super().__init__()
         self.lstm = nn.LSTM(
             input_size=observed_dimension,

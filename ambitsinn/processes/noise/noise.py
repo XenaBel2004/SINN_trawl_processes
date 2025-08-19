@@ -1,11 +1,10 @@
 # -*- coding: ascii -*-
-"""
-NoiseProcess - a collection of *i.i.d.* random variables.
+"""NoiseProcess - a collection of *i.i.d.* random variables.
 
 The process is defined solely by the log-characteristic function of a single
-margin (the *cumulant function*) and, torch Distribution object.  Because the variables are independent, the joint cumulant is simply
-the sum of the marginal cumulants and the autocorrelation is 1 at lag 0 and
-0 elsewhere.
+margin (the *cumulant function*) and, torch Distribution object.  Because the
+variables are independent, the joint cumulant is simply the sum of the marginal
+cumulants and the autocorrelation is 1 at lag 0 and 0 elsewhere.
 
 The implementation conforms to the abstract API defined in ``base.py``:
 * ``NoiseProcess`` derives from :class:`StationaryStochasticProcess`.
@@ -14,18 +13,18 @@ The implementation conforms to the abstract API defined in ``base.py``:
 
 from __future__ import annotations
 
-from typing import Callable, Optional, cast
+from typing import Optional, cast
 
 import torch
-from torch import Tensor
+from torch import Generator, Tensor
 from torch.distributions.distribution import Distribution
 
-from .base import StationaryStochasticProcess, StationaryProcessFDD
+from ...utils import ElementwiseFn
+from ..base import StationaryProcessFDD, StationaryStochasticProcess
 
 
 class NoiseProcess(StationaryStochasticProcess):
-    """
-    Stationary *independent-noise* process  ``Y_t``.
+    r"""Stationary *independent-noise* process  ``Y_t``.
 
     For every time point ``t`` the random variable ``Y_t`` has the same
     marginal law, characterised by its **log-characteristic function**
@@ -49,25 +48,23 @@ class NoiseProcess(StationaryStochasticProcess):
         Default orientation for ``theta`` (see :class:`StationaryStochasticProcess`).
     arg_check :
         Whether to perform run-time validation of arguments.
+
     """
 
     def __init__(
         self,
         distr: Distribution,
-        cumulant_func: Callable[[Tensor], Tensor],
+        cumulant_func: ElementwiseFn,
         **default_opts,
     ) -> None:
         super().__init__(**default_opts)
 
         self.distr: Distribution = distr
-        self.cumulant_func: Callable[[Tensor], Tensor] = cumulant_func
+        self.cumulant_func: ElementwiseFn = cumulant_func
 
-    def at_times(
-        self, times: Tensor, rng: Optional[torch.Generator] = None
-    ) -> "NoiseFDD":
-        """
-        Create a finite-dimensional distribution (FDD) for the supplied
-        observation grid.
+    def at_times(self, times: Tensor, rng: Optional[Generator] = None) -> NoiseFDD:
+        """Create a finite-dimensional distribution (FDD) for the supplied observation
+        grid.
 
         The returned ``NoiseFDD`` knows the grid, the cumulant function,
         and (if supplied) the sampler / PDF.
@@ -85,12 +82,12 @@ class NoiseProcess(StationaryStochasticProcess):
         NoiseFDD
             An FDD object that implements :meth:`cumulant`, :meth:`charfunc`,
             and (optionally) :meth:`sample`.
+
         """
         return NoiseFDD(self, times, rng=rng)
 
     def pdf(self, x: Tensor) -> Tensor:
-        """
-        Marginal probability density function.
+        """Marginal probability density function.
 
         Parameters
         ----------
@@ -101,12 +98,12 @@ class NoiseProcess(StationaryStochasticProcess):
         -------
         Tensor
             Density values with the same shape as ``x``.
+
         """
         return self.distr.log_prob(x).exp()
 
     def acf(self, lags: Tensor) -> Tensor:
-        """
-        Autocorrelation function for an i.i.d. process.
+        """Autocorrelation function for an i.i.d. process.
 
         By definition the autocorrelation equals ``1`` at lag ``0`` and ``0``
         for any non-zero lag.
@@ -120,6 +117,7 @@ class NoiseProcess(StationaryStochasticProcess):
         -------
         Tensor
             Tensor of zeros with ones at positions where ``lags == 0``.
+
         """
         # Ensure the output has the same dtype/device as the input.
         zeros: Tensor = torch.zeros_like(lags, dtype=torch.float64)
@@ -127,36 +125,8 @@ class NoiseProcess(StationaryStochasticProcess):
         return torch.where(lags == 0, ones, zeros)
 
 
-class GaussianNoise(NoiseProcess):
-    def __init__(self, mean: float = 0.0, var: float = 1.0, **default_opts) -> None:
-        self.mean: Tensor = torch.tensor(mean, device=default_opts.get("device"))
-        self.var: Tensor = torch.tensor(var, device=default_opts.get("device"))
-        distr: Distribution = torch.distributions.normal.Normal(
-            self.mean, self.var**0.5
-        )
-        def cumulant(u: Tensor) -> Tensor:
-            return torch.exp(
-                    1.0j * self.mean * u - self.var * u**2 / 2
-                )
-        super().__init__(distr, cumulant, **default_opts)
-
-
-class ExponentialNoise(NoiseProcess):
-    def __init__(self, rate: float = 1.0, **default_opts) -> None:
-        self.rate: Tensor = torch.tensor(rate, device=default_opts.get("device"))
-        distr: Distribution = torch.distributions.gamma.Gamma(
-            torch.tensor(1.0), self.rate
-        )
-        def cumulant(u: Tensor) -> Tensor:
-            return -torch.log(
-                    1 - 1.0j * u / self.rate
-                )
-        super().__init__(distr, cumulant, **default_opts)
-
-
 class NoiseFDD(StationaryProcessFDD):
-    """
-    Finite-dimensional distribution for a :class:`NoiseProcess`.
+    """Finite-dimensional distribution for a :class:`NoiseProcess`.
 
     Because the variables are independent the joint cumulant is the sum of the
     marginal cumulants.  Sampling (if a ``sample_func`` was given) simply draws
@@ -168,12 +138,11 @@ class NoiseFDD(StationaryProcessFDD):
         process: NoiseProcess,
         times: Tensor,
         *,
-        rng: Optional[torch.Generator] = None,
+        rng: Optional[Generator] = None,
         arg_check: bool = True,
         theta_batch_first: bool = True,
     ) -> None:
-        """
-        Parameters
+        """Parameters
         ----------
         process :
             Parent :class:`NoiseProcess` instance.
@@ -187,6 +156,7 @@ class NoiseFDD(StationaryProcessFDD):
         theta_batch_first :
             Default orientation for ``theta`` (overwrites the global default
             stored on the parent process).
+
         """
         super().__init__(times, process, rng=rng)
         self.process: NoiseProcess = cast(NoiseProcess, self.process)  # MyPy fix
@@ -199,8 +169,8 @@ class NoiseFDD(StationaryProcessFDD):
         theta: Tensor,
         theta_batch_first: Optional[bool] = None,
     ) -> Tensor:
-        """
-        Joint cumulant :math: `\\kappa(\\theta)` for the vector :math: `(Y_{t_1}, ..., Y_{t_D})`.
+        r"""Joint cumulant :math: `\\kappa(\\theta)` for the vector :math: `(Y_{t_1},
+        ..., Y_{t_D})`.
 
         Because the variables are independent, the joint cumulant equals the
         sum of the *marginal* cumulants evaluated at each coordinate of :math: `\\theta`:
@@ -222,6 +192,7 @@ class NoiseFDD(StationaryProcessFDD):
         -------
         Tensor
             Cumulant values of shape ``(B,)`` (one value per batch).
+
         """
         if self.process.arg_check:
             self.process._validate_cumulant_args(theta, self.times)
@@ -241,8 +212,7 @@ class NoiseFDD(StationaryProcessFDD):
         batch_first: Optional[bool] = None,
         unsqueeze_last: Optional[bool] = None,
     ) -> Tensor:
-        """
-        Draw independent trajectories for the supplied grid.
+        """Draw independent trajectories for the supplied grid.
 
         The method uses the optional ``sample_func`` that the user may have
         provided when constructing the parent :class:`NoiseProcess`.  If no
@@ -265,12 +235,9 @@ class NoiseFDD(StationaryProcessFDD):
         Tensor
             Sampled trajectories of shape ``(batch_size, D, 1)`` (or transposed
             when ``batch_first=False``).
+
         """
-        samples = self.process.distr.sample(
-            sample_shape=(batch_size, self.times.shape[0])
-        )
+        samples = self.process.distr.sample(sample_shape=(batch_size, self.times.shape[0]))
 
         # Shape handling required by the public API.
-        return self.process._normalize_sample(
-            samples, sample_batch_first=batch_first, sample_unsqueeze=unsqueeze_last
-        )
+        return self.process._normalize_sample(samples, sample_batch_first=batch_first, sample_unsqueeze=unsqueeze_last)

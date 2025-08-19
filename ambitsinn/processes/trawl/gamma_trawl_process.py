@@ -1,6 +1,5 @@
 # gamma_trawl.py
-"""
-Gamma-trawl process implementation.
+"""Gamma-trawl process implementation.
 
 In this file the Levy seed is a **Gamma** random measure with shape
 parameter ``alpha_seed`` and rate ``rate_seed``.  The marginal distribution of
@@ -18,16 +17,17 @@ Both classes inherit the heavy-lifting logic from :class:`TrawlProcess` and
 
 from __future__ import annotations
 
-import torch
-from torch import Tensor
 from typing import Callable, Optional, cast
 
-from .trawl import TrawlProcess, TrawlProcessFDD
+import torch
+from torch import Tensor
+
+from .trawl_process import TrawlProcess
+from .trawl_process_fdd import TrawlProcessFDD
 
 
 class GammaTrawlProcess(TrawlProcess):
-    """
-    Stationary **Gamma trawl** process ``X_t = L(A_t)``.
+    """Stationary **Gamma trawl** process ``X_t = L(A_t)``.
 
     The Levy seed ``L′`` is a Gamma random measure with *shape* ``alpha_seed`` and
     *rate* ``beta_seed``.  The marginal distribution of ``X_t`` is
@@ -62,6 +62,7 @@ class GammaTrawlProcess(TrawlProcess):
         ℓ(u) = -α_seed * log(1 - i u / β_seed),
 
     which is used throughout the cumulant/characteristic-function machinery.
+
     """
 
     def __init__(
@@ -88,8 +89,7 @@ class GammaTrawlProcess(TrawlProcess):
         # Levy-seed cumulant (log-characteristic function) for a Gamma seed.
         # -----------------------------------------------------------------
         def seed_cumulant(u: Tensor) -> Tensor:
-            """
-            Log-characteristic function ℓ(u) of a Gamma Levy seed.
+            """Log-characteristic function ℓ(u) of a Gamma Levy seed.
 
             The Gamma seed has shape ``α_seed`` and rate ``β_seed``.  Its
             log-characteristic function is
@@ -106,6 +106,7 @@ class GammaTrawlProcess(TrawlProcess):
             -------
             Tensor
                 Complex-valued cumulant, broadcastable to the shape of ``u``.
+
             """
             # Cast to a complex dtype that matches the input precision.
             if u.dtype == torch.float32:
@@ -130,8 +131,7 @@ class GammaTrawlProcess(TrawlProcess):
     # Public API required by :class:`StationaryStochasticProcess`
     # -----------------------------------------------------------------
     def pdf(self, x: Tensor) -> Tensor:
-        """
-        Marginal probability density of the Gamma trawl process.
+        """Marginal probability density of the Gamma trawl process.
 
         Parameters
         ----------
@@ -142,15 +142,13 @@ class GammaTrawlProcess(TrawlProcess):
         -------
         Tensor
             Density values with the same shape as ``x``.
+
         """
         return torch.distributions.gamma.Gamma(self.shape, self.rate).log_prob(x).exp()
 
-    def at_times(
-        self, times: Tensor, rng: Optional[torch.Generator] = None
-    ) -> "GammaTrawlProcessFDD":
-        """
-        Build the finite-dimensional distribution (FDD) for a specific
-        observation grid.
+    def at_times(self, times: Tensor, rng: Optional[torch.Generator] = None) -> "GammaTrawlProcessFDD":
+        """Build the finite-dimensional distribution (FDD) for a specific observation
+        grid.
 
         Parameters
         ----------
@@ -163,13 +161,13 @@ class GammaTrawlProcess(TrawlProcess):
         -------
         GammaTrawlProcessFDD
             The concrete FDD bound to this process and the supplied ``times``.
+
         """
         return GammaTrawlProcessFDD(times, self, rng)
 
 
 class GammaTrawlProcessFDD(TrawlProcessFDD):
-    """
-    Finite-dimensional distribution for :class:`GammaTrawlProcess`.
+    """Finite-dimensional distribution for :class:`GammaTrawlProcess`.
 
     This class implements the slice-sampling routine required by the generic
     ``TrawlProcessFDD.sample`` algorithm.  All other heavy-lifting methods
@@ -183,8 +181,7 @@ class GammaTrawlProcessFDD(TrawlProcessFDD):
         process: GammaTrawlProcess,
         rng: Optional[torch.Generator] = None,
     ) -> None:
-        """
-        Parameters
+        """Parameters
         ----------
         times :
             Observation grid (strictly increasing 1-D tensor).
@@ -193,18 +190,20 @@ class GammaTrawlProcessFDD(TrawlProcessFDD):
         rng :
             torch.Generator object, left for compability. Currently, reproducuble sampling
             is possible only via ``torch.manual_seed``
+
         """
         super().__init__(times, process, rng=rng)
-        self.process: GammaTrawlProcess = cast(
-            GammaTrawlProcess, self.process
-        )  # MyPy fix
+
+        # TODO: implenet proper MyPy fix
+        # The following is just hints mypy that super().__init__
+        # does not change type of process
+        self.process: GammaTrawlProcess = cast(GammaTrawlProcess, self.process)
 
     # -----------------------------------------------------------------
     # Internal helper - sampling the Gamma slice variables
     # -----------------------------------------------------------------
     def _sample_slices(self, batch_size: int = 1) -> Tensor:
-        """
-        Sample a ``(batch_size, D, D)`` tensor of slice values.
+        """Sample a ``(batch_size, D, D)`` tensor of slice values.
 
         For a Gamma Levy seed the slice variable associated with a
         Lebesgue measure ``Δ`` follows a Gamma distribution with
@@ -225,11 +224,10 @@ class GammaTrawlProcessFDD(TrawlProcessFDD):
         Tensor
             Sampled slice matrix of shape ``(batch_size, D, D)`` where
             ``D = len(times)``.
+
         """
         # Broadcast the slice-measure matrix to the batch dimension.
-        slices_ = self.slices.broadcast_to(
-            batch_size, self.slices.shape[0], self.slices.shape[0]
-        )
+        slices_ = self.slices.broadcast_to(batch_size, self.slices.shape[0], self.slices.shape[0])
         result = torch.zeros_like(slices_)
 
         # Boolean mask of entries that need to be sampled (non-zero Lebesgue measure).
