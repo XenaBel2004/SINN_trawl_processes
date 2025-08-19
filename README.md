@@ -23,6 +23,7 @@ poetry run jupyter-notebook
 ```bash
 !git clone https://github.com/XenaBel2004/SINN_trawl_processes.git
 !cp SINN_trawl_processes/ambitsinn . -r
+```
 
 Далее можно использовать как обычный пакет:
 ```python
