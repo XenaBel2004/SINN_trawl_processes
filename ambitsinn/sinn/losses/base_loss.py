@@ -363,5 +363,6 @@ class WeightedStatLoss(nn.Module):
             [loss_mod(x) for loss_mod in self.terms],
             dtype=x.dtype,
             device=x.device,
+            requires_grad=True,
         )
         return torch.sum(self.weights * total)
