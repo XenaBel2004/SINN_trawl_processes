@@ -43,7 +43,7 @@ class ACF:
         # Zero‑padding to avoid circular convolution artefacts
         n = x_centered.shape[1]
         n_fft = n * 2 - 1
-
+        print(lags)
         # FFT, multiply by complex conjugate, inverse FFT → autocovariance
         f = torch.fft.fft(x_centered, n=n_fft, dim=1)
         acov = torch.fft.ifft(f * f.conj(), dim=1).real[:, :n].mean(dim=0)
@@ -90,7 +90,7 @@ class ACF:
         x = _normalize_data(x, self.data_batch_first)
 
         if self.lags is None:
-            lags = _lags_to_idx_tensor(x.shape[0], device=x.device)
+            lags = _lags_to_idx_tensor(x.shape[1], device=x.device)
         elif not isinstance(self.lags, LongTensor):
             lags = _lags_to_idx_tensor(self.lags, device=x.device)
         else:
