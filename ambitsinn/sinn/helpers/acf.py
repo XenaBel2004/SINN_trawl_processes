@@ -43,7 +43,6 @@ class ACF:
         # Zero‑padding to avoid circular convolution artefacts
         n = x_centered.shape[1]
         n_fft = n * 2 - 1
-        print(lags)
         # FFT, multiply by complex conjugate, inverse FFT → autocovariance
         f = torch.fft.fft(x_centered, n=n_fft, dim=1)
         acov = torch.fft.ifft(f * f.conj(), dim=1).real[:, :n].mean(dim=0)
