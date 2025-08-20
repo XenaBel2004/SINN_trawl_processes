@@ -263,7 +263,7 @@ class OUProcessFDD(StationaryProcessFDD):
         sample_idxs = torch.searchsorted(Time, self.times)
 
         # Allocate trajectory tensor.
-        Traj = torch.zeros((batch_size, total_steps))
+        Traj = torch.zeros((batch_size, total_steps), device = self.process.device)
 
         # Initial value drawn from the stationary distribution.
         Traj[:, 0] = torch.normal(
