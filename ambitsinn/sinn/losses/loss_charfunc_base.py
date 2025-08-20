@@ -88,7 +88,7 @@ class CharFuncComponent:
 
         # Evaluate both empirical and target CFs, compute the risk and average
         loss = risk(
-            torch.mean(torch.exp(1.0j * (data[:, self.idx, :] @ theta.t())), dim=0) * data_kernel(theta),
+            torch.mean(torch.exp(1.0j * (data[:, self.idx, 0] @ theta.t())), dim=0) * data_kernel(theta),
             self.target_fn(theta, theta_batch_first=True),
         ).mean()
         return loss
