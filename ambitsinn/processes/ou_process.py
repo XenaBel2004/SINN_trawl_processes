@@ -276,7 +276,7 @@ class OUProcessFDD(StationaryProcessFDD):
         for i in range(1, total_steps):
             # Wiener increment.
             dW_t = torch.normal(
-                torch.tensor(0.0).broadcast_to(batch_size),
+                torch.tensor(0.0, device=self.process.device).broadcast_to(batch_size),
                 torch.sqrt(dTime[i - 1]).broadcast_to(batch_size),
                 generator=self.rng,
             )
