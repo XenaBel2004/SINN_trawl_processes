@@ -8,7 +8,7 @@ from torch import LongTensor, Tensor
 from tqdm.auto import tqdm
 
 from ...processes import StationaryProcessFDD, StationaryStochasticProcess
-from ..helpers import CharFunc, _normalize_data
+from ..helpers import _normalize_data
 from .base_loss import BaseStatLoss
 
 # --------------------------------------------------------------------- #
@@ -82,18 +82,13 @@ class CharFuncComponent:
         """
         data_batched_first = _normalize_data(data, data_batch_first)
         device = data_batched_first.device
-        _, D, _ = data_batched_first.shape
 
         # Random MC points uniformly drawn from [-bound, bound]^D
         theta = 2.0 * mc_bound * torch.rand(mc_points, self.idx.shape[0], device=device) - mc_bound
 
-        # Slice the data for the selected indices
-        data_slice = data_batched_first[:, self.idx, :]  # (B, L, 1)
-        empirical_cf = CharFunc(data_slice, data_batch_first=True, kernel=data_kernel)
-
         # Evaluate both empirical and target CFs, compute the risk and average
         loss = risk(
-            empirical_cf(theta, theta_batch_first=True),
+            torch.mean(torch.exp(1.0j * (data[:, self.idx, :] @ theta.t())), dim=0) * data_kernel(theta),
             self.target_fn(theta, theta_batch_first=True),
         ).mean()
         return loss
@@ -120,7 +115,7 @@ def _make_cf_component_from_fdd(
     CharFuncComponent
 
     """
-    return CharFuncComponent(idx=idx.to(fdd.process.device), target_fn=fdd.charfunc)
+    return CharFuncComponent(idx=idx, target_fn=fdd.charfunc)
 
 
 def _make_cf_component_from_data(
@@ -145,8 +140,11 @@ def _make_cf_component_from_data(
     CharFuncComponent
 
     """
-    target_fn = CharFunc(data[:, idx, :], data_batch_first=True, kernel=kernel)
-    return CharFuncComponent(idx=idx.to(data.device), target_fn=target_fn)
+
+    def target_fn(theta: Tensor) -> Tensor:
+        return torch.mean(torch.exp(1.0j * (data[:, idx, :] @ theta.t())), dim=0) * kernel(theta)
+
+    return CharFuncComponent(idx=idx, target_fn=target_fn)
 
 
 class CharFuncLoss(BaseStatLoss):
