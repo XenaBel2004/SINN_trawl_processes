@@ -37,7 +37,7 @@ class ACFLoss(BaseStatLoss):
         stat_fn = ACF(
             lags,
             method=acf_method,
-            data_batch_first=False,
+            data_batch_first=True,
         )
         return cls(target, stat_fn, acf_method=acf_method, lags=lags, **configuration_opts)
 
