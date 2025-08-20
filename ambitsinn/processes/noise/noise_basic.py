@@ -16,7 +16,7 @@ class GaussianNoise(NoiseProcess):
         distr: Distribution = Normal(self.mean, self.var**0.5)
 
         def cumulant(u: Tensor) -> Tensor:
-            return torch.exp(1.0j * self.mean * u - self.var * u**2 / 2)
+            return 1.0j * self.mean * u - self.var * u**2 / 2
 
         super().__init__(distr, cumulant, **default_opts)
 
