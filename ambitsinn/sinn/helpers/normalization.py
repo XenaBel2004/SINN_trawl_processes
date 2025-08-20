@@ -29,7 +29,7 @@ def _normalize_data(data: Tensor, is_batch_first: bool = False) -> Tensor:
             out = data.transpose(0, 1)  # swap batch & time
     else:
         raise ValueError(f"data must be 2‑D (B×D) or 3‑D (B×D×1); got shape {tuple(data.shape)}")
-    return out.contiguous()
+    return out
 
 
 def _lags_to_idx_tensor(lags: Union[int, Iterable[int]], device: Optional[torch.Device] = None) -> LongTensor:
