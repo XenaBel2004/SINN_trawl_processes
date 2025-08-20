@@ -27,7 +27,7 @@ class CharFunc:
         data: Tensor,
         *,
         data_batch_first: bool = False,
-        kernel: BatchedTensorFn = lambda theta: torch.ones(theta.shape[1]),  # type: ignore
+        kernel: BatchedTensorFn = lambda theta: torch.ones(theta.shape[1], device=theta.device),  # type: ignore
     ) -> None:
         self.data = _normalize_data(data, data_batch_first)  # (B, D, 1)
         self.kernel = kernel
