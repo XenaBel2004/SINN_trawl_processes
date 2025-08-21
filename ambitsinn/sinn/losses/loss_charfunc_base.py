@@ -86,7 +86,8 @@ class CharFuncComponent:
         def evaluate_loss(theta: Tensor) -> Tensor:
             "Evaluate loss"
             return risk(
-                torch.mean(torch.exp(1.0j * (data[:, self.idx, 0] @ theta.t())), dim=0) * data_kernel(theta),
+                torch.mean(torch.exp(1.0j * torch.sum(data[:, self.idx, :] * theta.t(), dim=1)), dim=0)
+                * data_kernel(theta),
                 self.target_fn(theta, theta_batch_first=True),
             ).mean()
 
