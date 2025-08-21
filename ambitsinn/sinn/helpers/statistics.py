@@ -101,7 +101,7 @@ def charfunc(data: Tensor, theta: Tensor) -> Tensor:
     """
     return torch.mean(
         torch.exp(
-            1.0j * (data * theta.t())  # (B, M)
+            1.0j * (torch.sum(data * theta.t(), dim = 1))  # (B, M)
         ),
         dim=0,
     )
