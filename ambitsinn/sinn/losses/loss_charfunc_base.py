@@ -219,15 +219,15 @@ class CharFuncLoss(BaseStatLoss):
         if disable_tqdm is None:
             disable_tqdm = self.disable_tqdm_default
 
-        data_ = _normalize_data(data, data_batch_first)
-        loss = torch.tensor(0.0, device=data_.device, dtype=data_.dtype, requires_grad=True)
+        data = _normalize_data(data, data_batch_first)
+        loss = torch.tensor(0.0, device=data.device, dtype=data.dtype)
         for comp in tqdm(self.components, disable=disable_tqdm):
             jacob = 1.0
             if self.dim_normalization:
                 # Jacobian factor (2·bound)^{|idx|}
                 jacob = (2.0 * self.mc_bound) ** comp.idx.shape[0]
             loss += jacob * comp._mc_estimate(
-                data_,
+                data,
                 data_batch_first=True,
                 data_kernel=self.data_kernel,
                 mc_points=self.mc_points,
