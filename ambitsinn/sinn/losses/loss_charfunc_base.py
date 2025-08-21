@@ -147,8 +147,6 @@ def _make_cf_component_from_data(
     def target_fn(theta: Tensor, theta_batch_first: Optional[bool] = True) -> Tensor:
         if theta_batch_first:
             theta = theta.t()
-        print(theta.shape)
-        print(data[:, idx, :].shape)
         return torch.mean(torch.exp(1.0j * torch.sum(data[:, idx, :] * theta, dim=1)), dim=0) * kernel(theta.t())
 
     return CharFuncComponent(idx=idx, target_fn=target_fn)
