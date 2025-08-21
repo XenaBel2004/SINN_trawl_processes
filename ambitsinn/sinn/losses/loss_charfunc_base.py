@@ -222,7 +222,11 @@ class CharFuncLoss(BaseStatLoss):
         data_ = _normalize_data(data, data_batch_first)
         loss = torch.tensor(0.0, device=data_.device, dtype=data_.dtype, requires_grad=True)
         for comp in tqdm(self.components, disable=disable_tqdm):
-            term = comp._mc_estimate(
+            jacob = 1.0
+            if self.dim_normalization:
+                # Jacobian factor (2·bound)^{|idx|}
+                jacob = (2.0 * self.mc_bound) ** comp.idx.shape[0]
+            loss += jacob * comp._mc_estimate(
                 data_,
                 data_batch_first=True,
                 data_kernel=self.data_kernel,
@@ -230,10 +234,6 @@ class CharFuncLoss(BaseStatLoss):
                 mc_bound=self.mc_bound,
                 risk=self.risk,
             )
-            if self.dim_normalization:
-                # Jacobian factor (2·bound)^{|idx|}
-                term = ((2.0 * self.mc_bound) ** comp.idx.shape[0]) * term
-            loss = loss + term
         return loss
 
     @classmethod
