@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Concatenate, List, Optional, Sequence
+from typing import Callable, List, Sequence
 
 import torch
 from torch import Tensor
 from tqdm.auto import tqdm
 
 from ...processes import StationaryProcessFDD, StationaryStochasticProcess
-from ..helpers import _normalize_data
+from ..helpers import CharFunc, _normalize_data, charfunc
 from .base_loss import BaseStatLoss
 
 # --------------------------------------------------------------------- #
 # Module-level defaults (centralised constants)
 # --------------------------------------------------------------------- #
-DEFAULT_MC_POINTS: int = 1_000  # number of Monte-Carlo draws
+DEFAULT_MC_POINTS: int = 1000  # number of Monte-Carlo draws
 DEFAULT_MC_BOUND: float = 1.0  # integration bound for uniform draw
 
 
@@ -38,7 +38,7 @@ class CharFuncComponent:
     idx : Tensor
         1-D integer tensor selecting the observation times that this component
         works on (e.g. ``torch.arange(i, i + window)``).
-    target_fn : Callable[[Tensor], Tensor]
+    target_cf : Callable[[Tensor], Tensor]
         The target characteristic function (either analytic from a model FDD or
         empirical via ``MonteCarloEstimatedCF``).  It must accept a tensor of
         shape ``(M, D)`` and return a complex tensor of shape ``(M,)``.
@@ -46,55 +46,52 @@ class CharFuncComponent:
     """
 
     idx: List[int]
-    target_fn: Callable[Concatenate[Tensor, ...], Tensor]
+    target_cf: Callable[[Tensor], Tensor]
 
-    def _mc_estimate(
-        self,
-        data: Tensor,
-        data_batch_first: bool = False,
-        *,
-        data_kernel: Callable[[Tensor], Tensor] = DEFAULT_KERNEL,
-        mc_points: int = DEFAULT_MC_POINTS,
-        mc_bound: float = DEFAULT_MC_BOUND,
-        risk: Callable[[Tensor, Tensor], Tensor] = DEFAULT_RISK,
-    ) -> Tensor:
-        """Monte-Carlo contribution of *this* component.
 
-        Parameters
-        ----------
-        data_batched_first : Tensor
-            Shape ``(B, D, 1)`` - batch-first representation of the full data.
-        data_kernel : Callable, optional
-            Importance-sampling kernel evaluated at the MC points.
-        mc_points : int, optional
-            Number of MC points (default ``DEFAULT_MC_POINTS``).
-        mc_bound : float, optional
-            Integration bound for the uniform draw (default ``DEFAULT_MC_BOUND``).
-        risk : Callable, optional
-            Point-wise loss between the empirical and target characteristic
-            functions (default ``DEFAULT_RISK``).
+def COMPONENT_MC_ESTIMATED_LOSS(
+    comp: CharFuncComponent,
+    data: Tensor,
+    *,
+    mc_points: int = DEFAULT_MC_POINTS,
+    mc_bound: float = DEFAULT_MC_BOUND,
+    kernel: Callable[[Tensor], Tensor] = DEFAULT_KERNEL,
+    risk: Callable[[Tensor, Tensor], Tensor] = DEFAULT_RISK,
+) -> Tensor:
+    """Monte-Carlo contribution of *this* component.
 
-        Returns
-        -------
-        Tensor
-            Scalar (0-D) tensor that can be summed across components.
+    Parameters
+    ----------
+    compontnet: CharFunComponent
+    data : Tensor
+        Shape ``(B, D, 1)`` - batch-first representation of the full data.
 
-        """
-        data = _normalize_data(data, data_batch_first)
-        device = data.device
+    kernel : Callable, optional
+        Importance-sampling kernel evaluated at the MC points.
+    mc_points : int, optional
+        Number of MC points (default ``DEFAULT_MC_POINTS``).
+    mc_bound : float, optional
+        Integration bound for the uniform draw (default ``DEFAULT_MC_BOUND``).
+    risk : Callable, optional
+        Point-wise loss between the empirical and target characteristic
+        functions (default ``DEFAULT_RISK``).
 
-        def evaluate_loss(theta: Tensor) -> Tensor:
-            "Evaluate loss"
-            return risk(
-                torch.mean(torch.exp(1.0j * torch.sum(data[:, self.idx, :] * theta.t(), dim=1)), dim=0)
-                * data_kernel(theta),
-                self.target_fn(theta, theta_batch_first=True),
-            ).mean()
+    Returns
+    -------
+    Tensor
+        Scalar (0-D) tensor that can be summed across components.
 
-        # Random MC points uniformly drawn from [-bound, bound]^D
-        return evaluate_loss(2.0 * mc_bound * torch.rand(mc_points, len(self.idx), device = device) - mc_bound)
+    """
+    # Random MC points uniformly drawn from [-bound, bound]^D
+    theta = 2.0 * mc_bound * torch.rand(mc_points, len(comp.idx), device=data.device) - mc_bound
 
-        # Evaluate both empirical and target CFs, compute the risk and average
+    # Compute approximated charfunc from data
+    estimate = charfunc(data[:, comp.idx, :], theta) * kernel(theta)
+
+    # Compute targtet:
+    target = comp.target_cf(theta)
+
+    return risk(estimate, target).mean()
 
 
 # Helper - create a component from a model FDD or from empirical data
@@ -118,7 +115,7 @@ def _make_cf_component_from_fdd(
     CharFuncComponent
 
     """
-    return CharFuncComponent(idx=idx, target_fn=fdd.charfunc)
+    return CharFuncComponent(idx=idx, target_cf=fdd.charfunc)
 
 
 def _make_cf_component_from_data(
@@ -143,13 +140,7 @@ def _make_cf_component_from_data(
     CharFuncComponent
 
     """
-
-    def target_fn(theta: Tensor, theta_batch_first: Optional[bool] = True) -> Tensor:
-        if theta_batch_first:
-            theta = theta.t()
-        return torch.mean(torch.exp(1.0j * torch.sum(data[:, idx, :] * theta, dim=1)), dim=0) * kernel(theta.t())
-
-    return CharFuncComponent(idx=idx, target_fn=target_fn)
+    return CharFuncComponent(idx=idx, target_cf=CharFunc(data[:, idx, :], kernel, data_batch_first = True))
 
 
 class CharFuncLoss(BaseStatLoss):
@@ -165,7 +156,7 @@ class CharFuncLoss(BaseStatLoss):
         components: Sequence[CharFuncComponent],
         *,
         risk: Callable[[Tensor, Tensor], Tensor] = DEFAULT_RISK,
-        data_kernel: Callable[[Tensor], Tensor] = DEFAULT_KERNEL,
+        kernel: Callable[[Tensor], Tensor] = DEFAULT_KERNEL,
         mc_points: int = DEFAULT_MC_POINTS,
         mc_bound: float = DEFAULT_MC_BOUND,
         dim_normalization: bool = True,
@@ -178,12 +169,12 @@ class CharFuncLoss(BaseStatLoss):
             raise ValueError("CharFuncLoss needs at least one component")
         self.components = list(components)
 
-        self.data_batch_first_default = data_batch_first
-        self.disable_tqdm_default = disable_tqdm
+        self.data_batch_first = data_batch_first
+        self.disable_tqdm = disable_tqdm
 
         # Store defaults for the MC estimator
         self.risk = risk
-        self.data_kernel = data_kernel
+        self.kernel = kernel
         self.mc_points = mc_points
         self.mc_bound = mc_bound
         self.dim_normalization = dim_normalization
@@ -194,9 +185,6 @@ class CharFuncLoss(BaseStatLoss):
     def forward(
         self,
         data: Tensor,
-        *,
-        data_batch_first: Optional[bool] = None,
-        disable_tqdm: Optional[bool] = None,
     ) -> Tensor:
         """Evaluate the loss.
 
@@ -217,23 +205,17 @@ class CharFuncLoss(BaseStatLoss):
             Scalar loss (0-D tensor).
 
         """
-        if data_batch_first is None:
-            data_batch_first = self.data_batch_first_default
-        if disable_tqdm is None:
-            disable_tqdm = self.disable_tqdm_default
+        data = _normalize_data(data, self.data_batch_first)
 
-        data = _normalize_data(data, data_batch_first)
         loss = torch.tensor(0.0, device=data.device, dtype=data.dtype)
-        for comp in tqdm(self.components, disable=disable_tqdm):
-            print(torch.cuda.memory_summary())
+        for comp in tqdm(self.components, disable=self.disable_tqdm):
             jacob = 1.0
             if self.dim_normalization:
-                # Jacobian factor (2·bound)^{|idx|}
                 jacob = (2.0 * self.mc_bound) ** len(comp.idx)
-            loss += jacob * comp._mc_estimate(
+            loss += jacob * COMPONENT_MC_ESTIMATED_LOSS(
+                comp,
                 data,
-                data_batch_first=True,
-                data_kernel=self.data_kernel,
+                kernel=self.kernel,
                 mc_points=self.mc_points,
                 mc_bound=self.mc_bound,
                 risk=self.risk,
@@ -249,17 +231,17 @@ class CharFuncLoss(BaseStatLoss):
         idxs = cls._build_comp_idxs(times.shape[0], **loss_kwargs)
         components = []
         for idx in idxs:
-            components.append(_make_cf_component_from_fdd(idx, process.at_times(times[idx])))
+            fdd = process.at_times(times[idx])  # It is unclear, wil such thing duplicate times[tensor] or not
+            components.append(_make_cf_component_from_fdd(idx, fdd))
         return cls(components, **loss_kwargs)
 
     @classmethod
     def empirical(cls, data: Tensor, **loss_kwargs) -> CharFuncLoss:
-        kernel = loss_kwargs.get("data_kernel", DEFAULT_KERNEL)
-        data_batch_first = loss_kwargs.get("data_batch_first", False)
-
-        data_ = _normalize_data(data, data_batch_first)
-        idxs = cls._build_comp_idxs(data_.shape[1])
+        data = _normalize_data(data, loss_kwargs.get("data_batch_first", False))
+        idxs = cls._build_comp_idxs(data.shape[1])
         components = []
         for idx in idxs:
-            components.append(_make_cf_component_from_data(idx, data_, kernel=kernel))
+            components.append(
+                _make_cf_component_from_data(idx, data, kernel=loss_kwargs.get("data_kernel", DEFAULT_KERNEL))
+            )
         return cls(components, **loss_kwargs)

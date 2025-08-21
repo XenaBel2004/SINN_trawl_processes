@@ -1,5 +1,4 @@
 from .base_loss import BaseStatLoss as BaseStatLoss
-from .base_loss import WeightedStatLoss as WeightedStatLoss
 from .loss_acf import ACFLoss as ACFLoss
 from .loss_charfunc_base import CharFuncComponent as CharFuncComponent
 from .loss_charfunc_base import CharFuncLoss as CharFuncLoss
@@ -12,7 +11,6 @@ from .loss_density import DensityLoss as DensityLoss
 
 __all__ = [
     "BaseStatLoss",
-    "WeightedStatLoss",
     "DensityLoss",
     "ACFLoss",
     "CharFuncComponent",

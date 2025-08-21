@@ -24,14 +24,14 @@ Typical usage
 
 from __future__ import annotations
 
-from typing import Sequence, Union, cast
+from typing import Union, cast
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
 from ...utils import BatchedTensorFn, LossFn
+from ..helpers import _normalize_data
 
 # --------------------------------------------------------------------------- #
 #  Loss resolution
@@ -179,7 +179,7 @@ class BaseStatLoss(nn.Module):
     #  Forward pass
     # --------------------------------------------------------------------- #
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, data: Tensor) -> Tensor:
         """Compute the statistic on ``x`` and evaluate the configured loss.
 
         Parameters
@@ -201,168 +201,5 @@ class BaseStatLoss(nn.Module):
             if ``x`` have incorrect shape
 
         """
-        x = x.squeeze(dim=2)
-        if x.ndim >= 3:
-            raise ValueError("Multidimensional processes are not supported yet")
-
-        if not self.data_batch_first:
-            x = x.swapaxes(0, 1)
-        return self.loss_fn(self.stat_fn(x), self._target)
-
-    def __add__(self, other: Union[BaseStatLoss, WeightedStatLoss]) -> WeightedStatLoss:
-        """``self + other`` -> a :class:`WeightedStatLoss` that adds the two
-        components with unit weight.
-
-        The right-hand side may be another :class:`BaseStatLoss`,
-        a :class:`WeightedStatLoss` or ``0`` (used by :func:`sum`).  ``0 +
-        self`` is handled by :meth:`__radd__`.
-        """
-        if isinstance(other, BaseStatLoss):
-            terms = [self, other]
-            weights = torch.tensor(
-                [1.0, 1.0],
-                dtype=self._target.dtype,
-                device=self._target.device,
-            )
-            return WeightedStatLoss(terms, weights)
-
-        if isinstance(other, WeightedStatLoss):
-            terms = [self] + list(other.terms)  # type: ignore
-            weights = torch.cat(
-                [
-                    torch.tensor(
-                        [1.0],
-                        dtype=self._target.dtype,
-                        device=self._target.device,
-                    ),
-                    other.weights,
-                ]
-            )
-            return WeightedStatLoss(terms, weights)
-
-        return NotImplemented
-
-    def __rmul__(self, weight: float) -> WeightedStatLoss:
-        """``weight * loss`` - create a :class:`WeightedStatLoss` with a single
-        term whose weight equals *weight*.
-        """
-        if not isinstance(weight, (int, float)):
-            return NotImplemented
-        w = torch.tensor(
-            [float(weight)],
-            dtype=self._target.dtype,
-            device=self._target.device,
-        )
-        return WeightedStatLoss([self], w)
-
-    __mul__ = __rmul__
-
-
-# --------------------------------------------------------------------------- #
-#  Weighted loss container
-# --------------------------------------------------------------------------- #
-
-
-class WeightedStatLoss(nn.Module):
-    """Container that aggregates a list of loss modules, each optionally scaled by
-    a scalar weight.  The forward pass evaluates::
-
-        Sum[i = 1 ... ] weight_i * loss_i(x)
-
-    where each ``loss_i`` is an instance of :class:`BaseStatLoss` (or any
-    ``nn.Module`` that returns a scalar tensor).
-
-    Parameters
-    ----------
-    terms :
-        Sequence of ``BaseStatLoss`` objects that compute a scalar loss.
-    weights :
-        Sequence (or 1-D ``torch.Tensor``) of the same length as *terms*
-        containing the scalar weights.  The tensor is stored as a buffer so it
-        follows the module's device.
-
-    """
-
-    def __init__(
-        self,
-        terms: Sequence[BaseStatLoss],
-        weights: Union[Sequence[float], torch.Tensor],
-    ) -> None:
-        super().__init__()
-        if len(terms) == 0:
-            raise ValueError("WeightedStatLoss requires at least one term.")
-        if isinstance(weights, torch.Tensor):
-            w_tensor = weights.detach().clone()
-        else:
-            w_tensor = torch.tensor(weights, dtype=torch.float32)
-
-        if w_tensor.ndim != 1:
-            raise ValueError("`weights` must be a 1-dimensional tensor or sequence.")
-        if len(w_tensor) != len(terms):
-            raise ValueError(f"Number of weights ({len(w_tensor)}) does not match number of terms ({len(terms)}).")
-        # Buffer registration guarantees correct device handling.
-        self.register_buffer("weights", w_tensor)
-        self.weights: Tensor = cast(Tensor, self.weights)  # MyPy trick
-
-        self.terms = terms
-
-    def __add__(self, other: Union[BaseStatLoss, WeightedStatLoss]) -> "WeightedStatLoss":
-        """``self + other`` - return a new :class:`WeightedStatLoss` that
-        concatenates the two lists of terms and appends a unit weight for any
-        plain :class:`BaseStatLoss`.
-        """
-        if isinstance(other, BaseStatLoss):
-            new_terms = list(self.terms) + [other]
-            new_weights = torch.cat(
-                [
-                    self.weights,
-                    torch.tensor(
-                        [1.0],
-                        dtype=self.weights.dtype,
-                        device=self.weights.device,
-                    ),
-                ]
-            )
-            return WeightedStatLoss(new_terms, new_weights)
-
-        if isinstance(other, WeightedStatLoss):
-            new_terms = list(self.terms) + list(other.terms)
-            new_weights = torch.cat([self.weights, other.weights])
-            return WeightedStatLoss(new_terms, new_weights)
-
-        return NotImplemented
-
-    def __radd__(self, other: Union[BaseStatLoss, WeightedStatLoss]) -> WeightedStatLoss:
-        return self.__add__(other)
-
-    def __mul__(self, weight: float) -> WeightedStatLoss:
-        """``self * weight`` - return a new container with all weights scaled."""
-        if not isinstance(weight, (int, float)):
-            return NotImplemented
-        new_weights = self.weights * float(weight)
-        return WeightedStatLoss(list(self.terms), new_weights)
-
-    __rmul__ = __mul__
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Evaluate the weighted sum of the individual loss modules.
-
-        Parameters
-        ----------
-        x :
-            Input tensor that will be fed to each sub-loss module.
-
-        Returns
-        -------
-        Tensor
-            Scalar loss (zero-dimensional tensor) equal to
-            ``Sum[i = 1 ...] weight_i * loss_i(x)``.
-
-        """
-        total = torch.tensor(
-            [loss_mod(x) for loss_mod in self.terms],
-            dtype=x.dtype,
-            device=x.device,
-            requires_grad=True,
-        )
-        return torch.sum(self.weights * total)
+        data = _normalize_data(data, self.data_batch_first)
+        return self.loss_fn(self.stat_fn(data), self._target)
