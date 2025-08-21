@@ -225,6 +225,7 @@ class CharFuncLoss(BaseStatLoss):
         data = _normalize_data(data, data_batch_first)
         loss = torch.tensor(0.0, device=data.device, dtype=data.dtype)
         for comp in tqdm(self.components, disable=disable_tqdm):
+            print(torch.cuda.memory_summary())
             jacob = 1.0
             if self.dim_normalization:
                 # Jacobian factor (2·bound)^{|idx|}
