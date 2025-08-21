@@ -104,11 +104,11 @@ class TrawlProcessFDD(StationaryProcessFDD):
         if self.process.arg_check:
             self.process._validate_cumulant_args(theta, self.times)
 
-        theta_ = self.process._normalize_theta(theta, theta_batch_first)
+        theta = self.process._normalize_theta(theta, theta_batch_first)
 
         # Compute the lower-triangular cumulative theta matrix, evaluate the
         # Levy-seed cumulant on it and weight by the slice-measure matrix.
-        cumulants = self.process.seed_cumulant(self.process._compute_cumulative_theta(theta_)) * self.slices
+        cumulants = self.process.seed_cumulant(self.process._compute_cumulative_theta(theta)) * self.slices
         # Sum over the two slice dimensions, leaving only the batch axis.
         return torch.sum(cumulants, dim=tuple(range(1, cumulants.ndim)))
 
