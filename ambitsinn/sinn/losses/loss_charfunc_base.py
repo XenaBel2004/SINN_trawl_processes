@@ -80,18 +80,20 @@ class CharFuncComponent:
             Scalar (0-D) tensor that can be summed across components.
 
         """
-        data_batched_first = _normalize_data(data, data_batch_first)
-        device = data_batched_first.device
+        data = _normalize_data(data, data_batch_first)
+        device = data.device
+
+        def evaluate_loss(theta: Tensor) -> Tensor:
+            "Evaluate loss"
+            return risk(
+                torch.mean(torch.exp(1.0j * (data[:, self.idx, 0] @ theta.t())), dim=0) * data_kernel(theta),
+                self.target_fn(theta, theta_batch_first=True),
+            ).mean()
 
         # Random MC points uniformly drawn from [-bound, bound]^D
-        theta = 2.0 * mc_bound * torch.rand(mc_points, self.idx.shape[0], device=device) - mc_bound
+        return evaluate_loss(2.0 * mc_bound * torch.rand(mc_points, self.idx.shape[0], device=device) - mc_bound)
 
         # Evaluate both empirical and target CFs, compute the risk and average
-        loss = risk(
-            torch.mean(torch.exp(1.0j * (data[:, self.idx, 0] @ theta.t())), dim=0) * data_kernel(theta),
-            self.target_fn(theta, theta_batch_first=True),
-        ).mean()
-        return loss
 
 
 # Helper - create a component from a model FDD or from empirical data
