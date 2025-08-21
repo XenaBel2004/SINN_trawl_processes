@@ -92,7 +92,7 @@ class CharFuncComponent:
             ).mean()
 
         # Random MC points uniformly drawn from [-bound, bound]^D
-        return evaluate_loss(2.0 * mc_bound * torch.rand(mc_points, len(self.idx), device=device) - mc_bound)
+        return evaluate_loss(2.0 * mc_bound * torch.rand(mc_points, len(self.idx)) - mc_bound)
 
         # Evaluate both empirical and target CFs, compute the risk and average
 
