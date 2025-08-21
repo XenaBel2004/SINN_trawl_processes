@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional, Union
+from typing import Iterable, List, Union
 
-import torch
-from torch import LongTensor, Tensor
+from torch import IntTensor, LongTensor, Tensor
 
 
 def _normalize_data(data: Tensor, is_batch_first: bool = False) -> Tensor:
@@ -30,8 +29,10 @@ def _normalize_data(data: Tensor, is_batch_first: bool = False) -> Tensor:
     raise ValueError(f"data must be 2‑D (B×D) or 3‑D (B×D×1); got shape {tuple(data.shape)}")
 
 
-def _lags_to_idx_tensor(lags: Union[int, Iterable[int]], device: Optional[torch.Device] = None) -> LongTensor:
+def _lags_to_idx_tensor(lags: Union[int, Iterable[int], IntTensor, LongTensor]) -> List[int]:
     if isinstance(lags, int):
-        return torch.arange(lags, device=device, dtype=torch.int32)  # type: ignore
+        return list(range(lags))
+    elif isinstance(lags, Tensor | IntTensor | LongTensor):
+        return lags.tolist()  # type: ignore
     else:
-        return torch.tensor(list(lags), device=device, dtype=torch.int32)  # type: ignore
+        return list(lags)

@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from typing import (
-    Iterable,
-    Literal,
-    Optional,
-    Union,
-)
+from typing import Iterable, List, Literal, Optional, Union
 
-from torch import LongTensor, Tensor
+from torch import IntTensor, LongTensor, Tensor
 
 from ...processes import StationaryProcessFDD
 from ..helpers import ACF, _lags_to_idx_tensor
@@ -21,7 +16,7 @@ class ACFLoss(BaseStatLoss):
     def analytical(
         cls,
         distr: StationaryProcessFDD,
-        lags: Optional[Union[int, Iterable[int], LongTensor]] = None,
+        lags: Optional[Union[int, Iterable[int], IntTensor, LongTensor]] = None,
         *,
         acf_method: Literal["fft", "brute"] = "fft",
         **configuration_opts,
@@ -29,9 +24,7 @@ class ACFLoss(BaseStatLoss):
         if lags is None:
             lags = distr.times.numel()
 
-        lags_idx: LongTensor = (
-            _lags_to_idx_tensor(lags, device=distr.process.device) if not isinstance(lags, LongTensor) else lags
-        )
+        lags_idx: List[int] = _lags_to_idx_tensor(lags) if not isinstance(lags, List) else lags
 
         target = distr.process.acf(distr.times[lags_idx])
         stat_fn = ACF(
@@ -45,7 +38,7 @@ class ACFLoss(BaseStatLoss):
     def empirical(
         cls,
         data: Tensor,
-        lags: Optional[Union[int, Iterable[int], LongTensor]] = None,
+        lags: Optional[Union[int, Iterable[int], IntTensor, LongTensor]] = None,
         *,
         acf_method: Literal["fft", "brute"] = "fft",
         **configuration_opts,
@@ -64,8 +57,7 @@ class ACFLoss(BaseStatLoss):
         """
         if lags is None:
             lags = data.shape[0]
-        if not isinstance(lags, LongTensor):
-            lags = _lags_to_idx_tensor(lags, device=data.device)
+
         stat_fn = ACF(
             lags,
             method=acf_method,

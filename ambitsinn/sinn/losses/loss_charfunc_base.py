@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Callable, Concatenate, List, Optional, Sequence
 
 import torch
-from torch import LongTensor, Tensor
+from torch import Tensor
 from tqdm.auto import tqdm
 
 from ...processes import StationaryProcessFDD, StationaryStochasticProcess
@@ -45,7 +45,7 @@ class CharFuncComponent:
 
     """
 
-    idx: Tensor
+    idx: List[int]
     target_fn: Callable[Concatenate[Tensor, ...], Tensor]
 
     def _mc_estimate(
@@ -92,14 +92,14 @@ class CharFuncComponent:
             ).mean()
 
         # Random MC points uniformly drawn from [-bound, bound]^D
-        return evaluate_loss(2.0 * mc_bound * torch.rand(mc_points, self.idx.shape[0], device=device) - mc_bound)
+        return evaluate_loss(2.0 * mc_bound * torch.rand(mc_points, len(self.idx), device=device) - mc_bound)
 
         # Evaluate both empirical and target CFs, compute the risk and average
 
 
 # Helper - create a component from a model FDD or from empirical data
 def _make_cf_component_from_fdd(
-    idx: Tensor,
+    idx: List[int],
     fdd: StationaryProcessFDD,
 ) -> CharFuncComponent:
     """Build a :class:`CharFuncComponent` from a model's finite-dimensional
@@ -122,7 +122,7 @@ def _make_cf_component_from_fdd(
 
 
 def _make_cf_component_from_data(
-    idx: Tensor,
+    idx: List[int],
     data: Tensor,
     *,
     kernel: Callable[[Tensor], Tensor] = DEFAULT_KERNEL,
@@ -228,7 +228,7 @@ class CharFuncLoss(BaseStatLoss):
             jacob = 1.0
             if self.dim_normalization:
                 # Jacobian factor (2·bound)^{|idx|}
-                jacob = (2.0 * self.mc_bound) ** comp.idx.shape[0]
+                jacob = (2.0 * self.mc_bound) ** len(comp.idx)
             loss += jacob * comp._mc_estimate(
                 data,
                 data_batch_first=True,
@@ -240,7 +240,7 @@ class CharFuncLoss(BaseStatLoss):
         return loss
 
     @classmethod
-    def _build_comp_idxs(cls, D: int, **loss_kwargs) -> List[LongTensor]:
+    def _build_comp_idxs(cls, D: int, **loss_kwargs) -> List[List[int]]:
         raise NotImplementedError
 
     @classmethod

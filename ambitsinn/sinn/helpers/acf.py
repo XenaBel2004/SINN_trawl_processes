@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Iterable, Literal, Optional, Union
+from typing import Iterable, List, Literal, Optional, Union
 
 import torch
-from torch import LongTensor, Tensor
+from torch import IntTensor, LongTensor, Tensor
 
 from .normalization import _lags_to_idx_tensor, _normalize_data
 
@@ -11,7 +11,7 @@ from .normalization import _lags_to_idx_tensor, _normalize_data
 class ACF:
     def __init__(
         self,
-        lags: Optional[Union[int, Iterable[int], LongTensor]] = None,
+        lags: Optional[Union[int, Iterable[int], IntTensor, LongTensor]] = None,
         method: Literal["fft", "brute"] = "fft",
         data_batch_first: bool = False,
     ):
@@ -20,7 +20,7 @@ class ACF:
         self.data_batch_first = data_batch_first
 
     @staticmethod
-    def via_fft(x: Tensor, lags: LongTensor) -> Tensor:
+    def via_fft(x: Tensor, lags: List[int]) -> Tensor:
         """Autocorrelation function using the FFT trick.
 
         Parameters
@@ -52,7 +52,7 @@ class ACF:
         return acf
 
     @staticmethod
-    def via_bruteforce(x: Tensor, lags: LongTensor) -> Tensor:
+    def via_bruteforce(x: Tensor, lags: List[int]) -> Tensor:
         """Direct (O(N·L)) autocorrelation for an arbitrary list of lags.
 
         Parameters
@@ -71,7 +71,7 @@ class ACF:
         # Demean the time series
         x_centered = x[:, :, 0] - x[:, :, 0].mean()
 
-        out = torch.empty(lags.shape[0], dtype=x.dtype, device=x.device)
+        out = torch.empty(len(lags), dtype=x.dtype, device=x.device)
 
         for i, lag in enumerate(lags):
             if lag == 0:
@@ -89,11 +89,9 @@ class ACF:
         x = _normalize_data(x, self.data_batch_first)
 
         if self.lags is None:
-            lags = _lags_to_idx_tensor(x.shape[1], device=x.device)
-        elif not isinstance(self.lags, LongTensor):
-            lags = _lags_to_idx_tensor(self.lags, device=x.device)
-        else:
-            lags = self.lags.to(x.device)  # type: ignore
+            lags = _lags_to_idx_tensor(x.shape[1])
+        elif not isinstance(self.lags, List):
+            lags = _lags_to_idx_tensor(self.lags)
 
         if self.method == "fft":
             return ACF.via_fft(x, lags)
