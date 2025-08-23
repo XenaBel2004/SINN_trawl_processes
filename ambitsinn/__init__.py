@@ -26,7 +26,6 @@ from .sinn import CharFuncComponent as CharFuncComponent
 from .sinn import CharFuncLoss as CharFuncLoss
 from .sinn import DensityLoss as DensityLoss
 from .sinn import GaussianKDE as GaussianKDE
-from .sinn import WeightedStatLoss as WeightedStatLoss
 
 __all__ = [
     "StationaryStochasticProcess",
@@ -44,7 +43,6 @@ __all__ = [
     "OUProcess",
     "OUProcessFDD",
     "BaseStatLoss",
-    "WeightedStatLoss",
     "DensityLoss",
     "ACFLoss",
     "CharFuncComponent",

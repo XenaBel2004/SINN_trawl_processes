@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import math
 from typing import Optional
 
-import torch
 from torch import Tensor
+
+from .statistics import gaussian_kde
 
 # --------------------------------------------------------------------------- #
 #  Utility functions (statistics)
@@ -44,15 +44,4 @@ class GaussianKDE:
         self.bw = bw
 
     def __call__(self, x: Tensor) -> Tensor:
-        x = x.ravel()
-
-        # choose bandwidth
-        bw = self.bw
-        if bw is None:
-            bw = float(x.numel()) ** (-1 / 5)
-
-        grid = torch.linspace(self.lower, self.upper, steps=self.n, device=x.device)
-        kernel = torch.exp(-0.5 * ((x[:, None] - grid[None, :]) / bw) ** 2)
-        norm = (2 * math.pi) ** 0.5 * x.numel() * bw
-        density = kernel.sum(dim=0) / norm
-        return density
+        return gaussian_kde(x, self.lower, self.upper, self.n, self.bw)

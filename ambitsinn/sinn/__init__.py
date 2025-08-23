@@ -13,12 +13,10 @@ from .losses import CFRollingWindowLoss as CFRollingWindowLoss
 from .losses import CharFuncComponent as CharFuncComponent
 from .losses import CharFuncLoss as CharFuncLoss
 from .losses import DensityLoss as DensityLoss
-from .losses import WeightedStatLoss as WeightedStatLoss
 from .sinn import SINN as SINN
 
 __all__ = [
     "BaseStatLoss",
-    "WeightedStatLoss",
     "DensityLoss",
     "ACFLoss",
     "CharFuncComponent",

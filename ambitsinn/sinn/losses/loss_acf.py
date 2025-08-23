@@ -21,17 +21,14 @@ class ACFLoss(BaseStatLoss):
         acf_method: Literal["fft", "brute"] = "fft",
         **configuration_opts,
     ) -> "ACFLoss":
-        if lags is None:
-            lags = distr.times.numel()
+        lags = lags or distr.times.numel()
+        idxs = _lags_to_idx_tensor(lags) if not isinstance(lags, List) else lags
 
-        lags_idx: List[int] = _lags_to_idx_tensor(lags) if not isinstance(lags, List) else lags
-
-        target = distr.process.acf(distr.times[lags_idx])
+        target = distr.process.acf(distr.times[idxs])
         stat_fn = ACF(
-            lags,
-            method=acf_method,
-            data_batch_first=True,
-        )
+            idxs, method=acf_method, data_batch_first=True
+        )  # due to normalization in forward pass of base stat loss
+
         return cls(target, stat_fn, acf_method=acf_method, lags=lags, **configuration_opts)
 
     @classmethod
@@ -55,13 +52,12 @@ class ACFLoss(BaseStatLoss):
             Passed to the underlying :class:`BaseStatLoss`.
 
         """
-        if lags is None:
-            lags = data.shape[0]
+        lags = lags or data.numel()
+        idxs = _lags_to_idx_tensor(lags) if not isinstance(lags, List) else lags
 
         stat_fn = ACF(
-            lags,
-            method=acf_method,
-            data_batch_first=True,
-        )
+            idxs, method=acf_method, data_batch_first=True
+        )  # due to normalization in forward pass of base stat loss
         target = stat_fn(data)
+
         return cls(target, stat_fn, acf_method=acf_method, lags=lags, **configuration_opts)

@@ -5,6 +5,11 @@ from torch import Tensor
 
 from ...utils import BatchedTensorFn
 from .normalization import _normalize_data
+from .statistics import charfunc
+
+
+def DEFAULT_GMM_KERNEL(theta: Tensor) -> Tensor:
+    return torch.ones(theta.shape[0], device=theta.device)
 
 
 class CharFunc:
@@ -25,9 +30,9 @@ class CharFunc:
     def __init__(
         self,
         data: Tensor,
+        kernel: BatchedTensorFn = DEFAULT_GMM_KERNEL,
         *,
         data_batch_first: bool = False,
-        kernel: BatchedTensorFn = lambda theta: torch.ones(theta.shape[1], device=theta.device),  # type: ignore
     ) -> None:
         self.data = _normalize_data(data, data_batch_first)  # (B, D, 1)
         self.kernel = kernel
@@ -50,7 +55,4 @@ class CharFunc:
         """
         if not theta_batch_first:
             theta = theta.t()
-        kern = self.kernel(theta)  # (M,)
-        cumulant = 1.0j * (self.data[:, :, 0] @ theta.t())  # (B, M)
-        charfunc = torch.mean(torch.exp(cumulant), dim=0)  # (M,)  complex
-        return charfunc * kern
+        return charfunc(self.data, theta) * self.kernel(theta)
