@@ -140,7 +140,7 @@ def _make_cf_component_from_data(
     CharFuncComponent
 
     """
-    return CharFuncComponent(idx=idx, target_cf=CharFunc(data[:, idx, :], kernel, data_batch_first = True))
+    return CharFuncComponent(idx=idx, target_cf=CharFunc(data[:, idx, :], kernel, data_batch_first=True))
 
 
 class CharFuncLoss(BaseStatLoss):
