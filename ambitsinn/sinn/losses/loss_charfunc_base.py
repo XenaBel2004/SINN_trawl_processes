@@ -241,7 +241,5 @@ class CharFuncLoss(BaseStatLoss):
         idxs = cls._build_comp_idxs(data.shape[1])
         components = []
         for idx in idxs:
-            components.append(
-                _make_cf_component_from_data(idx, data, kernel=loss_kwargs.get("kernel", DEFAULT_KERNEL))
-            )
+            components.append(_make_cf_component_from_data(idx, data, kernel=loss_kwargs.get("kernel", DEFAULT_KERNEL)))
         return cls(components, **loss_kwargs)
