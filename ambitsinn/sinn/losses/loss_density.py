@@ -29,7 +29,7 @@ class DensityLoss(BaseStatLoss):
         **configuration_opts,
     ) -> DensityLoss:
         stat_fn = GaussianKDE(lower=lower, upper=upper, n=n, bw=bw)
-        target = distr.process.pdf(torch.linspace(lower, upper, steps=n))
+        target = distr.process.pdf(torch.linspace(lower, upper, steps=n, device=distr.process.device))
         return cls(target, stat_fn, lower=lower, upper=upper, n=n, bw=bw, **configuration_opts)
 
     @classmethod
